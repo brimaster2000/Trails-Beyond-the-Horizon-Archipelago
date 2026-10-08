@@ -28,6 +28,7 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.5
 SLOW_CALL_SECONDS = 2.0
+LOOP_LAG_WARNING_SECONDS = 2.0
 # Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
 # Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
 FINAL_BOSS_DEFEATED_FLAG = 32478
@@ -259,6 +260,16 @@ async def game_watcher(ctx: TBTHContext) -> None:
         await asyncio.sleep(POLL_SECONDS)
 
 
+async def loop_watchdog(ctx: TBTHContext, seconds: float = 1.0) -> None:
+    """Logs when the event loop wakes up late: a blocked loop can't answer the server's keepalive pings."""
+    while not ctx.exit_event.is_set():
+        started = time.monotonic()
+        await asyncio.sleep(seconds)
+        late = time.monotonic() - started - seconds
+        if late > LOOP_LAG_WARNING_SECONDS:
+            logger.warning(f"Event loop was blocked for {late:.1f}s")
+
+
 def launch(*launch_args: str):
     async def main():
         parser = get_base_parser(description="Trails Beyond the Horizon Client")
@@ -275,10 +286,14 @@ def launch(*launch_args: str):
             ctx.run_gui()
         ctx.run_cli()
         watcher = asyncio.create_task(game_watcher(ctx), name="TBTHGameWatcher")
+        watchdog = asyncio.create_task(loop_watchdog(ctx), name="TBTHLoopWatchdog")
         await ctx.exit_event.wait()
         await watcher
+        await watchdog
         await ctx.shutdown()
 
+    import Utils
+    Utils.init_logging("TBTHClient", exception_logger="Client")  # logs/TBTHClient_<time>.txt, like the Launcher
     colorama.just_fix_windows_console()
     asyncio.run(main())
     colorama.deinit()

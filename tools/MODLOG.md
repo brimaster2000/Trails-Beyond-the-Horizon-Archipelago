@@ -425,3 +425,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (TBTHContext.game_io), and calls slower than 2 s are logged as warnings for diagnosis.
   GOTCHA: CommonContext.game is the game NAME; a method called `game` shadowed it (tests caught it).
 - Also explained to the user: main 4SPG requests are only sent at chapter end (by design); side quests send at once.
+- Still disconnecting after the thread fix (user: during a Grim Garten clear). Server log timestamps:
+  - ok 06:18:54 → 06:56:08 (37 min);
+  - then drops ~45-50 s after each reconnect (06:56:42→06:57:27, 07:09:09→07:09:59);
+  - 07:13:42 join + leave in 57 ms.
+  Neither process was busy on CPU afterwards. Suspect: the Kivy GUI loop stalling while its window is behind/under the
+  fullscreen game (unproven).
+- Diagnostics added: client file log via Utils.init_logging("TBTHClient") → logs/TBTHClient_<time>.txt, plus an
+  event-loop watchdog that warns "Event loop was blocked for Xs" when the loop wakes > 2 s late.
