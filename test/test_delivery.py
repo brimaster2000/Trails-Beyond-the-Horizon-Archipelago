@@ -15,7 +15,9 @@ class FakeGame:
         self.popups: list[tuple[int, int, int]] = []
 
     def read_flags(self) -> bytes:
-        return bytes(0x2000)
+        flags = bytearray(0x2000)
+        flags[32000 // 8] |= 1 << (32000 % 8)  # a real save: the Prologue has started
+        return bytes(flags)
 
     def write_marker(self, marker: int) -> None:
         pass
@@ -77,3 +79,26 @@ class TestLiveDelivery(unittest.TestCase):
         self.run_sync(game, [balm, balm, balm])
         self.assertEqual(game.inventory[2], 2)
         self.assertEqual(game.received, 3)
+
+
+class TestTitleScreen(unittest.TestCase):
+    def test_title_screen_state_is_left_alone(self) -> None:
+        from ..Client import TBTHContext
+        from ..data import GAME_ITEMS
+
+        balm, _ = GAME_ITEMS["Teara Balm"]
+        game = FakeGame()
+        game.read_flags = lambda: bytes(0x2000)  # no Prologue flag: title screen
+        written = []
+        game.write_marker = lambda marker: written.append(marker)
+
+        async def run() -> None:
+            ctx = TBTHContext(None, None)
+            ctx.game_memory = game
+            ctx.items_received = [SimpleNamespace(item=balm)]
+            ctx.missing_locations = set()
+            await ctx.sync_with_game()
+
+        asyncio.run(run())
+        self.assertEqual(written, [])
+        self.assertEqual(game.inventory, {})

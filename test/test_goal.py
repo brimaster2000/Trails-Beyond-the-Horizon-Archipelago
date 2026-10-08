@@ -8,6 +8,7 @@ from .test_delivery import FakeGame
 
 def flags_with(*set_flags: int, cleared_domains: tuple[int, ...] = ()) -> bytes:
     flags = bytearray(0x2000)
+    flags[32000 // 8] |= 1 << (32000 % 8)  # a real save: the Prologue has started
     for flag in set_flags:
         flags[flag // 8] |= 1 << (flag % 8)
     for domain in cleared_domains:  # clear counter = 1

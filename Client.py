@@ -29,6 +29,9 @@ POLL_SECONDS = 0.5
 # Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
 # Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
 FINAL_BOSS_DEFEATED_FLAG = 32478
+# Chapter flag of the Prologue (t_chapter): set in every real save. The title screen already has an (empty) game
+# state object, so without this check the client would link and write into it.
+GAME_STARTED_FLAG = 32000
 
 
 def goal_requirements_missing(flags: bytes, offset: int, goal: int) -> list[str]:
@@ -180,7 +183,7 @@ class TBTHContext(CommonContext):
 
     async def sync_with_game(self) -> None:
         flags = self.game_memory.read_flags()
-        if flags is None:  # title screen, no save loaded
+        if flags is None or not save_reader.flag_is_set(flags, GAME_STARTED_FLAG, 0):  # title screen, no save loaded
             return
         marker = read_marker(flags)
         if marker == 0:  # a save this client hasn't seen: link it to this seed

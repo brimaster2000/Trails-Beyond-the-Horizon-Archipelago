@@ -410,3 +410,9 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (2) the engine re-enables boxes after map setup;
   (3) the engine still calls <event>_END (EVENT_NEXT chains) after a box handler returns early, so guard both;
   (4) refusing a box must move the player out of it, or it re-fires forever.
+
+## 2026-10-08: playtest bug: client wrote into the title-screen state
+- On a fresh launch (title screen) the client logged "Linked the loaded save to this seed" + "Goal requirements met"
+  (twice). The state pointer is non-null at the title with an empty flag array.
+- Fix: the client only syncs when flag 32000 (Prologue chapter flag) is set. All 27 of the user's saves have it; the
+  title state didn't. Test added.
