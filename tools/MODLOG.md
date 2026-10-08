@@ -224,3 +224,18 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - NOTE: saves from the earlier test seed only have flag 41001. With this patch, Parts B and C need 41002/41003 too.
   A new seed sets them via the client.
 - Next: 4SPG quest checks.
+
+## 2026-10-08: 4SPG side quest checks (built, not yet verified in game)
+- t_quest.tbl (KuroTools, schema "Kai"), table QuestTitle: 86 quests.
+  - Fields: id, quest_description (name), quest_giver, int2 = chapter (65535 = Grim Garten bounty), int1 = type.
+  - Kinds: 8 = quest, 32 = topic quest, 2 = main.
+  - Saved as tools/vanilla/t_quest_og.json (gitignored).
+- Side quests 1-35, bounties 51-65 (49 total) all complete through system.OnQuestEnd(id),
+  which ends with `13607@quest_set_state(arg0, 2)` (2 = completed; scripts test it with quest_check_state(id, 2)).
+  Patch: `set_flag(42000 + arg0)` right before it. Client reads flags 42001-42065 like chest flags.
+- Main requests 151-188: no script ever sets their state; the engine completes them at the chapter-end report
+  (ChapterEnd → QuestRewardProcess(var3..var5) + system[24,9]). Not checks yet. Next: verify quest_check_state(id, 2)
+  at chapter end in game, then hook QuestRewardProcess.
+- Region = the quest's chapter (CHAPTER_REGION). GG bounties 57/59/62/64 → domains 1/3/5/7.
+  - Option side_quest_checks (default on). Location ids 30_000_000 + quest id; location group "4SPG".
+- 51 tests pass; the 2-player seed grows by 49 locations per player. Built archive vs installed: only system.dat differs.

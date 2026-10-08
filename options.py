@@ -35,6 +35,15 @@ class GrimGartenDomainClears(Toggle):
     default = 1
 
 
+class SideQuestChecks(Toggle):
+    """
+    Completing a 4SPG side quest, topic quest or bounty is a check (49 quests).
+    Like the game itself, a quest can only be done during the chapter it belongs to.
+    """
+    display_name = "Side Quest Checks"
+    default = 1
+
+
 class Goal(Choice):
     """
     What unlocks the final boss door in the Finale.
@@ -52,10 +61,12 @@ class trailsbthOptions(PerGameCommonOptions):
     act_order: ActOrder
     grim_garten_chest_checks: GrimGartenChestChecks
     grim_garten_domain_clears: GrimGartenDomainClears
+    side_quest_checks: SideQuestChecks
     goal: Goal
 
 
 option_groups = [
     OptionGroup("Progression", [ActOrder, Goal]),
+    OptionGroup("Checks", [SideQuestChecks]),
     OptionGroup("Grim Garten", [GrimGartenChestChecks, GrimGartenDomainClears]),
 ]

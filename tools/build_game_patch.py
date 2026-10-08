@@ -1,6 +1,7 @@
 """
 Builds the Archipelago game patch: a script_eng.p3a with
-- system.dat: APGrantItems (gives items queued by the client), called from OnMapReinit;
+- system.dat: APGrantItems (gives items queued by the client), called from OnMapReinit, and OnQuestEnd setting
+  flag 42000 + quest id (4SPG checks);
 - t_item.tbl: a new stackable "Archipelago Item" (ARCHIPELAGO_ITEM_ID);
 - t_tbox.tbl: every hand-placed chest gives one Archipelago Item instead of its vanilla contents;
 - sys_event.dat: act gating in EV_NEXT_CHAPTER_END (a chapter starts only once its AP flag is set).
@@ -27,6 +28,7 @@ from pathlib import Path
 ARCHIPELAGO_ITEM_ID = 4922  # first free id after the game's last item (4921)
 ARCHIPELAGO_ITEM_TEMPLATE_ID = 107  # Workshop Points: stackable counter item (category 30)
 FIXED_CHEST_COUNT = 187
+QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build_data.py)
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
@@ -65,6 +67,10 @@ def patch_system_ing(source: str) -> str:
         raise SystemExit("system.dat already has the Archipelago hook; pass an unpatched script_eng.p3a as SOURCE")
     assert source.count(CALL_SITE) == 1, "OnMapReinit changed; find a new call site"
     source = source.replace(CALL_SITE, "\t443@Patch101();\n\tAPGrantItems();\n\t445@return;\n}")
+    # 4SPG checks: every side quest, topic quest and bounty completes through OnQuestEnd(quest id).
+    quest_done = "\t13607@quest_set_state(arg0, 2);\n"
+    assert source.count(quest_done) == 1, "OnQuestEnd changed; find where it marks the quest complete"
+    source = source.replace(quest_done, f"\tset_flag({QUEST_FLAG_BASE} + arg0);\n" + quest_done)
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
     return source.replace(anchor, HOOK.lstrip("\n") + anchor, 1)

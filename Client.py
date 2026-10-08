@@ -7,13 +7,14 @@ import colorama
 from CommonClient import CommonContext, gui_enabled, logger, server_loop, get_base_parser, ClientCommandProcessor, handle_url_arg
 
 from . import save_reader
-from .data import CHESTS, GAME_ITEMS
+from .data import CHESTS, GAME_ITEMS, QUESTS
 from .items import ITEM_NAME_TO_ID
 from .game_memory import CHAPTER_FLAG_BASE, read_marker, seed_marker
 from .scena_regions import CHAPTER_IDS
 
-# AP location id -> scenario flag the game sets when that chest is opened.
+# AP location id -> scenario flag the game sets for it (chest opened, or set by our patch when a quest completes).
 CHEST_LOCATION_FLAGS = {chest.id: chest.flag for chest in CHESTS if chest.flag is not None}
+CHEST_LOCATION_FLAGS |= {quest.id: quest.flag for quest in QUESTS if quest.kind == "side"}
 # AP item id -> [(game item id, quantity), ...]. Story items (Acts) give nothing in game yet.
 ITEM_CONTENTS = {ap_id: contents for ap_id, contents in GAME_ITEMS.values()}
 # AP item id of each act item -> the chapter it unlocks.

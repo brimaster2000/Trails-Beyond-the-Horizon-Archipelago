@@ -38,6 +38,10 @@ CHAPTER_IDS = {
     ACT_I_A: 1, ACT_I_B: 2, ACT_I_C: 3, R1: 4, K1: 5, V1: 6, R2: 10, V2: 11, V3: 12,
     K2: 13, V4: 14, V5: 15, R3: 16, K3: 17, V6: 18, FINALE: 19,
 }
+# Chapter id -> the region it belongs to (quests record their chapter in t_quest).
+CHAPTER_REGION = {chapter: name for name, chapter in CHAPTER_IDS.items()}
+# Grim Garten bounties (chapter 65535 in t_quest) -> the domain they're found in.
+GRIM_GARTEN_BOUNTY_DOMAIN = {57: 1, 59: 3, 62: 5, 64: 7}
 
 # Source: the area list per act from the Neoseeker walkthrough (supplied by Brimaster2000), plus NoobFeed for Act I parts.
 SCENA_REGION: dict[str, str | None] = {
