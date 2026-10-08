@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# Decoded game tables are game data: regenerate locally, never commit
+tools/vanilla/
+# Leftover cache-only folder from an earlier client layout
+client/
