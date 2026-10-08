@@ -28,8 +28,8 @@ class FakeGame:
     def popup_pending(self) -> bool:
         return False
 
-    def queue_popup(self, game_item_id: int, quantity: int, more: int) -> None:
-        self.popups.append((game_item_id, quantity, more))
+    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = 0) -> None:
+        self.popups.append((game_item_id, quantity, more) if kind == 0 else (kind, game_item_id, quantity, more))
 
     def received_count(self) -> int:
         return self.received
@@ -57,7 +57,7 @@ class TestLiveDelivery(unittest.TestCase):
         async def sync() -> None:
             ctx = TBTHContext(None, None)  # needs a running event loop
             ctx.game_memory = game
-            ctx.items_received = [SimpleNamespace(item=i) for i in received_ap_ids]
+            ctx.items_received = [SimpleNamespace(item=i, player=2, location=0) for i in received_ap_ids]
             ctx.missing_locations = set()
             await ctx.sync_with_game()
 
@@ -95,7 +95,7 @@ class TestTitleScreen(unittest.TestCase):
         async def run() -> None:
             ctx = TBTHContext(None, None)
             ctx.game_memory = game
-            ctx.items_received = [SimpleNamespace(item=balm)]
+            ctx.items_received = [SimpleNamespace(item=balm, player=2, location=0)]
             ctx.missing_locations = set()
             await ctx.sync_with_game()
 
@@ -130,3 +130,52 @@ class TestEventLoopStaysFree(unittest.TestCase):
         asyncio.run(run())
         self.assertEqual(len(ticks), 5)
         self.assertLess(ticks[-1] - ticks[0], 0.4)  # kept ticking while the read was still sleeping
+
+
+class TestChestPopups(unittest.TestCase):
+    def run_found(self, scouted: dict, slot: int = 1) -> tuple[FakeGame, list]:
+        from ..Client import TBTHContext, CHEST_LOCATION_FLAGS
+
+        location = next(iter(CHEST_LOCATION_FLAGS))
+        game = FakeGame()
+        flags = bytearray(game.read_flags())
+        flag = CHEST_LOCATION_FLAGS[location]
+        flags[flag // 8] |= 1 << (flag % 8)
+        game.read_flags = lambda: bytes(flags)
+        sent = []
+
+        async def run() -> None:
+            ctx = TBTHContext(None, None)
+            ctx.slot = slot
+            ctx.game_memory = game
+            ctx.items_received = []
+            ctx.missing_locations = {location}
+            ctx.scouted = {location: scouted} if scouted else {}
+
+            async def capture(msgs):
+                sent.extend(msgs)
+
+            ctx.send_msgs = capture
+            await ctx.sync_with_game()
+            # the server then sends our own item back: it must not be announced a second time
+            ctx.items_received = [SimpleNamespace(item=scouted.item, player=scouted.player, location=location)]                 if scouted and scouted.player == slot else []
+            game.popup_pending = lambda: False
+            await ctx.sync_with_game()
+
+        asyncio.run(run())
+        return game, sent
+
+    def test_own_item_shows_at_its_chest_once(self) -> None:
+        from ..data import GAME_ITEMS
+        balm, _ = GAME_ITEMS["Teara Balm"]
+        game, _ = self.run_found(SimpleNamespace(item=balm, player=1))
+        self.assertEqual(game.popups, [(1, 2, 1, 0)])  # "Found Teara Balm x1", and no second "Received" popup
+        self.assertEqual(game.inventory[2], 1)
+
+    def test_other_players_item(self) -> None:
+        game, _ = self.run_found(SimpleNamespace(item=12345, player=2))
+        self.assertEqual(game.popups, [(2, 0, 0, 0)])
+
+    def test_act_item(self) -> None:
+        game, _ = self.run_found(SimpleNamespace(item=4, player=1))
+        self.assertEqual(game.popups, [(3, 0, 0, 0)])

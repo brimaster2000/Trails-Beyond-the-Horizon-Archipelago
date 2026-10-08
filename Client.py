@@ -12,7 +12,10 @@ from NetUtils import ClientStatus
 from . import save_reader
 from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
-from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, read_marker, seed_marker
+from .game_memory import (
+    CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_RECEIVED,
+    read_marker, seed_marker,
+)
 from .locations import grim_garten_chest_id, grim_garten_clear_id
 from .options import Goal, GrimGartenChestChecks, GrimGartenRepeatClears
 from .scena_regions import CHAPTER_IDS
@@ -27,7 +30,7 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
                    if len(contents) == 1}
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
-POLL_SECONDS = 0.5
+POLL_SECONDS = 0.25  # a chest waits up to 1 s for its popup
 SLOW_CALL_SECONDS = 2.0
 LOOP_LAG_WARNING_SECONDS = 2.0
 STACK_DUMP_SECONDS = 3.0
@@ -90,7 +93,10 @@ class TBTHContext(CommonContext):
         self.last_save_mtime = 0
         self.game_memory = None  # game_memory.GameMemory while attached to kai.exe
         self.warned_marker = 0  # marker of a foreign save we already warned about
-        self.popup_backlog: list[tuple[int, int]] = []  # delivered items not yet announced in game
+        self.popup_backlog: list[tuple[int, int]] = []  # items from other worlds not yet announced in game
+        self.found_popups: list[tuple[int, int, int, int]] = []  # (kind, item, qty, more) for checks just found
+        self.scouted: dict[int, object] = {}  # location id -> NetworkItem (what each of our locations holds)
+        self.announced_locations: set[int] = set()  # own items already shown when their chest was opened
         self.goal = Goal.default
         self.grim_garten_chest_checks = GrimGartenChestChecks.default
         self.grim_garten_seen: dict[int, int] = {}  # domain -> chests counted, to explain chests past the checks
@@ -140,7 +146,13 @@ class TBTHContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         super().on_package(cmd, args)
+        if cmd == "LocationInfo":
+            for item in args["locations"]:
+                self.scouted[item.location] = item
         if cmd == "Connected":
+            # Learn what every location holds, so a chest's popup can show its own contents at once.
+            locations = list(set(args.get("missing_locations", [])) | set(args.get("checked_locations", [])))
+            asyncio.create_task(self.send_msgs([{"cmd": "LocationScouts", "locations": locations, "create_as_hint": 0}]))
             self.goal = args.get("slot_data", {}).get("goal", Goal.default)
             self.grim_garten_chest_checks = args.get("slot_data", {}).get(
                 "grim_garten_chest_checks", GrimGartenChestChecks.default)
@@ -166,9 +178,27 @@ class TBTHContext(CommonContext):
                             f"{self.grim_garten_chest_checks} chest checks per domain)")
             self.grim_garten_seen[domain] = count
 
+    def popup_for_found(self, location: int) -> tuple[int, int, int, int] | None:
+        """The popup describing what a just-opened location held, from the scouted contents."""
+        item = self.scouted.get(location)
+        if item is None:
+            return None
+        if item.player != self.slot:
+            return POPUP_FOUND_OTHER, 0, 0, 0
+        self.announced_locations.add(location)
+        if item.item in STORY_ITEM_CHAPTERS:
+            return POPUP_FOUND_ACT, 0, 0, 0
+        contents = ITEM_CONTENTS.get(item.item)
+        if not contents:
+            return None
+        game_item_id, quantity = contents[0]
+        return POPUP_FOUND_OWN, game_item_id, quantity, len(contents) - 1
+
     async def report_checks(self, found: set[int], source: str) -> None:
         found = (found & self.missing_locations) - self.locations_checked
         if found:
+            if source == "game":  # live: the player just opened it (not when reading saves with the game closed)
+                self.found_popups += [p for p in map(self.popup_for_found, sorted(found)) if p]
             logger.info(f"Found {len(found)} new check(s) ({source})")
             self.locations_checked |= found
             await self.send_msgs([{"cmd": "LocationChecks", "locations": list(found)}])
@@ -245,15 +275,16 @@ class TBTHContext(CommonContext):
 
         # Received items go straight into the live inventory. The saved counter moves with each one, so a reloaded
         # older save gets everything received after it again.
-        pending = deliveries(self.items_received)
+        pending = [(pair, item.player == self.slot and item.location in self.announced_locations)
+                   for item in self.items_received for pair in ITEM_CONTENTS.get(item.item, [])]
         count = await self.game_io(self.game_memory.received_count)
         while count < len(pending):
-            game_item_id, quantity = pending[count]
+            (game_item_id, quantity), already_shown = pending[count]
             added = await self.game_io(self.game_memory.add_item, game_item_id, quantity,
                                     ITEM_STACK_LIMITS.get(game_item_id, 99))
             count += 1
             await self.game_io(self.game_memory.set_received_count, count)
-            if added:
+            if added and not already_shown:
                 self.popup_backlog.append((game_item_id, added))
             name = GAME_ITEM_NAMES.get(game_item_id, f"item {game_item_id}")
             if added < quantity:
@@ -261,11 +292,15 @@ class TBTHContext(CommonContext):
             else:
                 logger.info(f"Received {name} x{quantity}")
 
-        # One in-game popup at the next safe moment (chest, conversation) announces the latest arrivals.
-        if self.popup_backlog and not await self.game_io(self.game_memory.popup_pending):
-            game_item_id, quantity = self.popup_backlog[0]
-            await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, len(self.popup_backlog) - 1)
-            self.popup_backlog.clear()
+        # In-game popups, one at a time: what a just-opened chest held comes first (the chest waits up to 1 s for
+        # it), then one summary of items that arrived from other worlds.
+        if (self.found_popups or self.popup_backlog) and not await self.game_io(self.game_memory.popup_pending):
+            if self.found_popups:
+                kind, game_item_id, quantity, more = self.found_popups.pop(0)
+            else:
+                kind, (game_item_id, quantity), more = POPUP_RECEIVED, self.popup_backlog[0], len(self.popup_backlog) - 1
+                self.popup_backlog.clear()
+            await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, more, kind)
 
 
 async def game_watcher(ctx: TBTHContext) -> None:

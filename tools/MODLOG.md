@@ -461,3 +461,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   New scena_regions.CHEST_REGION_OVERRIDES (location name → region) puts them in "Act III - Kevin Route 2".
   The running playtest seed still has the old placement (seeds are fixed at generation).
 - Hack boxes: the Sandsea Hack Box was hackable in Kevin Route 1 (user). No hacking-level logic needed so far.
+
+## 2026-10-08: chest popups show the chest's own contents (built, testing)
+- Playtest feedback: a chest's popup showed the PREVIOUS chest's item. The popup site ran before the client had even
+  seen the check, so the item only arrived for the next popup.
+- Client:
+  - on Connected it sends LocationScouts for all locations and keeps the LocationInfo results (self.scouted);
+  - on a live check it queues a "found" popup at once: kind 1 own item (first game item of the AP item), 2 another
+    player's item, 3 act unlock;
+  - own items found this way aren't announced again when ReceivedItems delivers them;
+  - poll interval is 0.25 s.
+- Patch: popup kind bits 40034-40035. TBoxProcess calls APWaitForChestPopup() (waits up to 10 x 0.1 s for flag 40032)
+  before APShowReceived(). The conversation site is unchanged. Messages: "Found <item> x<n>!",
+  "Found an item for another player!", "Found an act unlock!", plus the old "Received ... from Archipelago."
+- 91 tests pass.

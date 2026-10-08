@@ -24,6 +24,8 @@ FLAG_ARRAY_BYTES = 0x2000
 POPUP_ITEM_FLAG = 40000  # 40000-40015 item id, 40016-40031 quantity
 POPUP_PENDING_FLAG = 40032
 POPUP_MORE_FLAG = 40040  # 40040-40055: how many other items arrived since the last popup
+POPUP_KIND_FLAG = 40034  # 40034-40035: 0 received, 1 found own item, 2 found another player's item, 3 found an act
+POPUP_RECEIVED, POPUP_FOUND_OWN, POPUP_FOUND_OTHER, POPUP_FOUND_ACT = 0, 1, 2, 3
 # How many (game item, quantity) deliveries this save has been given, as a 32-bit number in flags 50000-50031.
 # Flags this high are saved (verified), so the count follows whichever save is loaded.
 RECEIVED_COUNTER_FLAG = 50000
@@ -177,8 +179,8 @@ class GameMemory:
             raise RuntimeError("No game loaded")
         return int.from_bytes(self.read(address + RECEIVED_COUNTER_FLAG // 8, 4), "little")
 
-    def queue_popup(self, game_item_id: int, quantity: int, more: int) -> None:
-        """Ask system.APShowReceived to show "Received <item> x<qty> (+<more> more)" at the next safe moment."""
+    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = POPUP_RECEIVED) -> None:
+        """Ask system.APShowReceived to show a popup at the next safe moment (a chest waits up to 1 s for it)."""
         if self.popup_pending():
             raise RuntimeError("Previous popup not shown yet")
         address = self.flag_array_address()
@@ -187,6 +189,8 @@ class GameMemory:
         word = (game_item_id & 0xFFFF) | (quantity & 0xFFFF) << 16
         self.write(address + POPUP_ITEM_FLAG // 8, word.to_bytes(4, "little"))  # flags 40000-40031
         self.write(address + POPUP_MORE_FLAG // 8, min(more, 0xFFFF).to_bytes(2, "little"))  # flags 40040-40055
+        self.set_flag(POPUP_KIND_FLAG, bool(kind & 1))
+        self.set_flag(POPUP_KIND_FLAG + 1, bool(kind & 2))
         self.set_flag(POPUP_PENDING_FLAG)
 
     def set_flag(self, flag: int, value: bool = True) -> None:

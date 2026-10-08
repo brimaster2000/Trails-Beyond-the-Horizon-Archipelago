@@ -36,7 +36,8 @@ QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build
 HOOK = '''
 // Archipelago: received items are added to the inventory live by the client; this only SHOWS a notification.
 // The client writes the game item id into flags 40000-40015, the quantity into 40016-40031, how many other items
-// arrived since the last popup into 40040-40055, and sets flag 40032. Called only where the game itself shows
+// arrived since the last popup into 40040-40055, the message kind into 40034-40035 (0 received, 1 found own item,
+// 2 found another player's item, 3 found an act unlock), and sets flag 40032. Called only where the game itself shows
 // message boxes (after a chest, at the end of a conversation) - never while a map is loading (that softlocked).
 fn APShowReceived() {
 	if flag(40032) {
@@ -58,15 +59,39 @@ fn APShowReceived() {
 			bit = bit * 2;
 			i = i + 1;
 		}
+		var kind = 0;
+		if flag(40034) {
+			kind = kind + 1;
+		}
+		if flag(40035) {
+			kind = kind + 2;
+		}
 		reset_flag(40032);
 		sound_play_se(10009);
-		if more > 0 {
+		if kind == 1 {
+			// what the chest just opened held: one of this player's own items
+			system[5,8](65535, "<C1>Found ", 17, id, "<C3> x", 18, qty, "<C1>!</C>", 16, 22);
+		} else if kind == 2 {
+			system[5,8](65535, "<C1>Found an item for another player!", 10, "<C3>(see your client)</C>", 16, 22);
+		} else if kind == 3 {
+			system[5,8](65535, "<C1>Found an act unlock!", 10, "<C3>(see your client)</C>", 16, 22);
+		} else if more > 0 {
 			system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, "<C1> from Archipelago.", 10, "<C3>(+", 18, more, " more - see your client)</C>", 16, 22);
 		} else {
 			system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, "<C1> from Archipelago.</C>", 16, 22);
 		}
 		wait_prompt();
 		mes_message_close();
+	}
+	return;
+}
+
+// At a chest, give the client up to 1 s to post what this chest held, so the popup belongs to this chest.
+fn APWaitForChestPopup() {
+	var w = 0;
+	while !flag(40032) && w < 10 {
+		wait(0.1);
+		w = w + 1;
 	}
 	return;
 }
@@ -221,7 +246,8 @@ def patch_system_ing(source: str) -> str:
     # conversation (still inside the talk event, before event_end).
     chest_fade_in = [line for line in source.split("\n") if line.endswith("4363@fade_in(0.5, 0, 0.0);")]
     assert len(chest_fade_in) == 1, "TBoxProcess changed; find its fade_in after the SP message"
-    source = source.replace(chest_fade_in[0] + "\n", "\t\tAPShowReceived();\n" + chest_fade_in[0] + "\n")
+    source = source.replace(chest_fade_in[0] + "\n",
+                            "\t\tAPWaitForChestPopup();\n\t\tAPShowReceived();\n" + chest_fade_in[0] + "\n")
     talk_ends = [line for line in source.split("\n") if line.endswith("@OnTalkEndCommon();")]
     assert len(talk_ends) == 2, "OnTalkEnd/OnTalkEndCam changed"
     for line in talk_ends:
