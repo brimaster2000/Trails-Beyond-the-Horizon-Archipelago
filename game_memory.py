@@ -18,10 +18,12 @@ STATE_POINTER_RVA = 0xD60258
 FLAGS_OFFSET_IN_STATE = 0x110
 FLAG_ARRAY_BYTES = 0x2000
 
-# Mailbox read by system.APGrantItems (our hook in script_eng.p3a's system.dat, called from OnMapReinit).
+# Popup mailbox read by system.APShowReceived (our hook in script_eng.p3a's system.dat), which shows a notification
+# after the next chest or conversation. Items themselves are added live (add_item); the popup only informs.
 # No script references flags above 37194, and no save sets one.
-MAILBOX_ITEM_FLAG = 40000  # 40000-40015 item id, 40016-40031 quantity
-MAILBOX_PENDING_FLAG = 40032
+POPUP_ITEM_FLAG = 40000  # 40000-40015 item id, 40016-40031 quantity
+POPUP_PENDING_FLAG = 40032
+POPUP_MORE_FLAG = 40040  # 40040-40055: how many other items arrived since the last popup
 # How many (game item, quantity) deliveries this save has been given, as a 32-bit number in flags 50000-50031.
 # Flags this high are saved (verified), so the count follows whichever save is loaded.
 RECEIVED_COUNTER_FLAG = 50000
@@ -164,8 +166,8 @@ class GameMemory:
             raise RuntimeError("No game loaded")
         self.write(address + RECEIVED_COUNTER_FLAG // 8, count.to_bytes(4, "little"))
 
-    def delivery_pending(self) -> bool:
-        return self.flag(MAILBOX_PENDING_FLAG)
+    def popup_pending(self) -> bool:
+        return self.flag(POPUP_PENDING_FLAG)
 
     def received_count(self) -> int:
         address = self.flag_array_address()
@@ -173,22 +175,17 @@ class GameMemory:
             raise RuntimeError("No game loaded")
         return int.from_bytes(self.read(address + RECEIVED_COUNTER_FLAG // 8, 4), "little")
 
-    def deliver_item(self, game_item_id: int, quantity: int, new_received_count: int | None = None) -> None:
-        """
-        Queue one item for system.APGrantItems, which gives it on the next map load and clears the pending flag.
-        The counter is bumped in the same step, so any save holds either neither change or both
-        (and a save with the item still pending delivers it again after loading).
-        """
-        if self.delivery_pending():
-            raise RuntimeError("Previous item not collected yet")
+    def queue_popup(self, game_item_id: int, quantity: int, more: int) -> None:
+        """Ask system.APShowReceived to show "Received <item> x<qty> (+<more> more)" at the next safe moment."""
+        if self.popup_pending():
+            raise RuntimeError("Previous popup not shown yet")
         address = self.flag_array_address()
         if address is None:
             raise RuntimeError("No game loaded")
         word = (game_item_id & 0xFFFF) | (quantity & 0xFFFF) << 16
-        self.write(address + MAILBOX_ITEM_FLAG // 8, word.to_bytes(4, "little"))  # flags 40000-40031
-        if new_received_count is not None:
-            self.write(address + RECEIVED_COUNTER_FLAG // 8, new_received_count.to_bytes(4, "little"))
-        self.set_flag(MAILBOX_PENDING_FLAG)
+        self.write(address + POPUP_ITEM_FLAG // 8, word.to_bytes(4, "little"))  # flags 40000-40031
+        self.write(address + POPUP_MORE_FLAG // 8, min(more, 0xFFFF).to_bytes(2, "little"))  # flags 40040-40055
+        self.set_flag(POPUP_PENDING_FLAG)
 
     def set_flag(self, flag: int, value: bool = True) -> None:
         address = self.flag_array_address()

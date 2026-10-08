@@ -63,6 +63,7 @@ class TBTHContext(CommonContext):
         self.last_save_mtime = 0
         self.game_memory = None  # game_memory.GameMemory while attached to kai.exe
         self.warned_marker = 0  # marker of a foreign save we already warned about
+        self.popup_backlog: list[tuple[int, int]] = []  # delivered items not yet announced in game
 
     def run_gui(self):
         """Import kivy UI system and start running it as self.ui_task."""
@@ -167,11 +168,19 @@ class TBTHContext(CommonContext):
             added = self.game_memory.add_item(game_item_id, quantity, ITEM_STACK_LIMITS.get(game_item_id, 99))
             count += 1
             self.game_memory.set_received_count(count)
+            if added:
+                self.popup_backlog.append((game_item_id, added))
             name = GAME_ITEM_NAMES.get(game_item_id, f"item {game_item_id}")
             if added < quantity:
                 logger.info(f"Received {name} x{quantity} (inventory full: only {added} fit)")
             else:
                 logger.info(f"Received {name} x{quantity}")
+
+        # One in-game popup at the next safe moment (chest, conversation) announces the latest arrivals.
+        if self.popup_backlog and not self.game_memory.popup_pending():
+            game_item_id, quantity = self.popup_backlog[0]
+            self.game_memory.queue_popup(game_item_id, quantity, more=len(self.popup_backlog) - 1)
+            self.popup_backlog.clear()
 
 
 async def game_watcher(ctx: TBTHContext) -> None:

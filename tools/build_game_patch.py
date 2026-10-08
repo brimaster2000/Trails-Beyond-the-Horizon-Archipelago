@@ -1,6 +1,6 @@
 """
 Builds the Archipelago game patch: a script_eng.p3a with
-- system.dat: APGrantItems (gives items queued by the client), called from OnMapReinit, and OnQuestEnd setting
+- system.dat: APShowReceived (popup for items the client added live) after chests and conversations, and OnQuestEnd setting
   flag 42000 + quest id (4SPG checks);
 - t_item.tbl: a new stackable "Archipelago Item" (ARCHIPELAGO_ITEM_ID);
 - t_tbox.tbl: every hand-placed chest gives one Archipelago Item instead of its vanilla contents;
@@ -33,12 +33,15 @@ QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
-// Archipelago: one pending item per map load. The client writes the game item id into flags 40000-40015,
-// the quantity into flags 40016-40031, and sets flag 40032; we give the item and clear 40032 as the acknowledgement.
-fn APGrantItems() {
+// Archipelago: received items are added to the inventory live by the client; this only SHOWS a notification.
+// The client writes the game item id into flags 40000-40015, the quantity into 40016-40031, how many other items
+// arrived since the last popup into 40040-40055, and sets flag 40032. Called only where the game itself shows
+// message boxes (after a chest, at the end of a conversation) - never while a map is loading (that softlocked).
+fn APShowReceived() {
 	if flag(40032) {
 		var id = 0;
 		var qty = 0;
+		var more = 0;
 		var bit = 1;
 		var i = 0;
 		while i < 16 {
@@ -48,13 +51,21 @@ fn APGrantItems() {
 			if flag(40016 + i) {
 				qty = qty + bit;
 			}
+			if flag(40040 + i) {
+				more = more + bit;
+			}
 			bit = bit * 2;
 			i = i + 1;
 		}
-		if qty > 0 {
-			item_add(id, qty);
-		}
 		reset_flag(40032);
+		sound_play_se(10009);
+		if more > 0 {
+			system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, "<C1> from Archipelago.", 10, "<C3>(+", 18, more, " more - see your client)</C>", 16, 22);
+		} else {
+			system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, "<C1> from Archipelago.</C>", 16, 22);
+		}
+		wait_prompt();
+		mes_message_close();
 	}
 	return;
 }
@@ -154,12 +165,21 @@ def patch_boss_ing(source: str, domain: int) -> str:
 
 
 def patch_system_ing(source: str) -> str:
-    if "fn APGrantItems()" in source:
+    if "fn APShowReceived()" in source:
         raise SystemExit("system.dat already has the Archipelago hook; pass an unpatched script_eng.p3a as SOURCE")
     assert source.count(CALL_SITE) == 1, "OnMapReinit changed; find a new call site"
     source = source.replace(
-        CALL_SITE, f"\t443@Patch101();\n\tAPGrantItems();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
+        CALL_SITE, f"\t443@Patch101();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
     # Grim Garten chests: count right after the chest's contents are handed over.
+    # Popup sites: after a chest (where TBoxProcess shows its own "Earned 1 SP." message) and at the end of a
+    # conversation (still inside the talk event, before event_end).
+    chest_fade_in = [line for line in source.split("\n") if line.endswith("4363@fade_in(0.5, 0, 0.0);")]
+    assert len(chest_fade_in) == 1, "TBoxProcess changed; find its fade_in after the SP message"
+    source = source.replace(chest_fade_in[0] + "\n", "\t\tAPShowReceived();\n" + chest_fade_in[0] + "\n")
+    talk_ends = [line for line in source.split("\n") if line.endswith("@OnTalkEndCommon();")]
+    assert len(talk_ends) == 2, "OnTalkEnd/OnTalkEndCam changed"
+    for line in talk_ends:
+        source = source.replace(line + "\n", line + "\n\tAPShowReceived();\n")
     tbox_lines = [line for line in source.split("\n") if line.endswith("@map_obj_tbox_get();")]
     assert len(tbox_lines) == 1, "TBoxProcess changed; find map_obj_tbox_get"
     source = source.replace(tbox_lines[0] + "\n", tbox_lines[0] + "\n\t\tAPGGChestOpened();\n")

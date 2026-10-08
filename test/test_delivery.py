@@ -12,6 +12,7 @@ class FakeGame:
     def __init__(self, received: int = 0) -> None:
         self.inventory: dict[int, int] = {}
         self.received = received
+        self.popups: list[tuple[int, int, int]] = []
 
     def read_flags(self) -> bytes:
         return bytes(0x2000)
@@ -21,6 +22,12 @@ class FakeGame:
 
     def set_flag(self, flag: int, value: bool = True) -> None:
         pass
+
+    def popup_pending(self) -> bool:
+        return False
+
+    def queue_popup(self, game_item_id: int, quantity: int, more: int) -> None:
+        self.popups.append((game_item_id, quantity, more))
 
     def received_count(self) -> int:
         return self.received
@@ -62,6 +69,7 @@ class TestLiveDelivery(unittest.TestCase):
         self.assertEqual(game.inventory[2], 2)  # Teara Balm twice
         self.assertEqual({g: game.inventory[g] for g, _ in contents}, {g: 100 for g, _ in contents})
         self.assertEqual(game.received, 2 + len(contents))  # one per (item, quantity) delivery
+        self.assertEqual(game.popups, [(2, 1, 1 + len(contents))])  # one popup: the first item, +N more
 
     def test_older_save_gets_the_rest_again(self) -> None:
         balm, _ = GAME_ITEMS["Teara Balm"]

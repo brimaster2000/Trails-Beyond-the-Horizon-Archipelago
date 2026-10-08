@@ -334,3 +334,12 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   really currency, so it's capped at 9999. Unique gear (stack 1) stays at 1.
 - The script mailbox (APGrantItems, flags 40000-40032) is no longer used by the client. It's kept in the patch for a
   possible future popup (show it at a safe moment: chest open / talk end — NOT OnMapLoadPost).
+
+## 2026-10-08: safe-moment popup (built, testing)
+- Items are added live by the client; the game patch now only SHOWS a notification: system.APShowReceived().
+  - Popup mailbox: flags 40000-40015 item id, 40016-40031 quantity, 40040-40055 "more" count, pending flag 40032.
+  - Sites: TBoxProcess right before `4363@fade_in(0.5, 0, 0.0)` (where it shows its own "Earned 1 SP." with
+    wait_prompt), and after both `@OnTalkEndCommon();` (OnTalkEnd / OnTalkEndCam, still inside the talk event).
+  - The old APGrantItems (item_add on map load) is removed from the patch; OnMapReinit only resets the GG guard.
+- Client: delivered items go into popup_backlog; when no popup is pending it queues one (first item, +N more) and
+  clears the backlog.
