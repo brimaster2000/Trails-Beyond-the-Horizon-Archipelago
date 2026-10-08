@@ -210,3 +210,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 
 ## Restore path
 - Before any modded launch: back up the save folder (find under `%USERPROFILE%\Saved Games` or Documents/My Games) and the original `.p3a` files.
+
+## 2026-10-08: git + Act I split
+- The world folder is its own git repo (branch main). .gitignore excludes tools/vanilla/ (decoded game data) and caches.
+  This MODLOG copy in tools/ is now the canonical journal.
+- Act I is split into "Act I - A/B/C" (chapters 1/2/3). Maps:
+  - A: Seiden Waterworks, Western Outskirts, Lèvre;
+  - B: Underground Culvert, Blacklight;
+  - C: Junction Area + Grim Garten domains 1-2.
+- Story item AP ids = chapter ids (1..19).
+- Gate: sys_event EV_NEXT_CHAPTER_END transitions 1→2 ("65@var0 = 2;") and 2→3 ("70@var0 = 3;") are now wrapped in APWaitChapter.
+- Installed. Previous archive backed up as p3a_backup_2026-10-08/script_eng_gate_actI_whole.p3a.
+- NOTE: saves from the earlier test seed only have flag 41001. With this patch, Parts B and C need 41002/41003 too.
+  A new seed sets them via the client.
+- Next: 4SPG quest checks.
