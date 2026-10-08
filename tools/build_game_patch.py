@@ -1,6 +1,6 @@
 """
 Builds the Archipelago game patch: a script_eng.p3a with
-- system.dat: APGrantItems (gives items queued by the client with a popup), called from OnMapLoadPost, and OnQuestEnd setting
+- system.dat: APGrantItems (gives items queued by the client), called from OnMapReinit, and OnQuestEnd setting
   flag 42000 + quest id (4SPG checks);
 - t_item.tbl: a new stackable "Archipelago Item" (ARCHIPELAGO_ITEM_ID);
 - t_tbox.tbl: every hand-placed chest gives one Archipelago Item instead of its vanilla contents;
@@ -35,9 +35,8 @@ QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build
 HOOK = '''
 // Archipelago: one pending item per map load. The client writes the game item id into flags 40000-40015,
 // the quantity into flags 40016-40031, and sets flag 40032; we give the item and clear 40032 as the acknowledgement.
-// Runs from OnMapLoadPost (map fully loaded) and waits while an event or cutscene is running.
 fn APGrantItems() {
-	if flag(40032) && event_get_mode() == 0 {
+	if flag(40032) {
 		var id = 0;
 		var qty = 0;
 		var bit = 1;
@@ -53,14 +52,7 @@ fn APGrantItems() {
 			i = i + 1;
 		}
 		if qty > 0 {
-			// Same popup style as the game's own "Received <item> x5." messages (17 = item name, 18 = number).
-			OnGeneralEventBegin(0);
-			sound_play_se(10009);
-			system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, "<C1> from Archipelago.");
 			item_add(id, qty);
-			wait_prompt();
-			mes_message_close();
-			OnGeneralEventEnd(0, 5);
 		}
 		reset_flag(40032);
 	}
@@ -165,11 +157,8 @@ def patch_system_ing(source: str) -> str:
     if "fn APGrantItems()" in source:
         raise SystemExit("system.dat already has the Archipelago hook; pass an unpatched script_eng.p3a as SOURCE")
     assert source.count(CALL_SITE) == 1, "OnMapReinit changed; find a new call site"
-    source = source.replace(CALL_SITE, f"\t443@Patch101();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
-    # Items are handed over once a map has finished loading, with a popup.
-    load_post_end = "\t502@effect_release(65535, 387, 1);\n\t503@return;\n}"
-    assert source.count(load_post_end) == 1, "OnMapLoadPost changed; find its end"
-    source = source.replace(load_post_end, "\t502@effect_release(65535, 387, 1);\n\tAPGrantItems();\n\t503@return;\n}")
+    source = source.replace(
+        CALL_SITE, f"\t443@Patch101();\n\tAPGrantItems();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
     # Grim Garten chests: count right after the chest's contents are handed over.
     tbox_lines = [line for line in source.split("\n") if line.endswith("@map_obj_tbox_get();")]
     assert len(tbox_lines) == 1, "TBoxProcess changed; find map_obj_tbox_get"

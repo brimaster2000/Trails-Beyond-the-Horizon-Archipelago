@@ -18,7 +18,7 @@ STATE_POINTER_RVA = 0xD60258
 FLAGS_OFFSET_IN_STATE = 0x110
 FLAG_ARRAY_BYTES = 0x2000
 
-# Mailbox read by system.APGrantItems (our hook in script_eng.p3a's system.dat, called from OnMapLoadPost and shown with a popup).
+# Mailbox read by system.APGrantItems (our hook in script_eng.p3a's system.dat, called from OnMapReinit).
 # No script references flags above 37194, and no save sets one.
 MAILBOX_ITEM_FLAG = 40000  # 40000-40015 item id, 40016-40031 quantity
 MAILBOX_PENDING_FLAG = 40032
