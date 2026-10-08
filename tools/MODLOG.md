@@ -460,4 +460,4 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Logic fix from the playtest: Sandsea Chests 8 and 9 (m3200 Treasure07/08) are only reachable in Kevin Route 2.
   New scena_regions.CHEST_REGION_OVERRIDES (location name → region) puts them in "Act III - Kevin Route 2".
   The running playtest seed still has the old placement (seeds are fixed at generation).
-- Open question: do hack boxes need a hacking level (TBoxProcess checks security levels 1-3)? Needs in-game confirmation.
+- Hack boxes: the Sandsea Hack Box was hackable in Kevin Route 1 (user). No hacking-level logic needed so far.
