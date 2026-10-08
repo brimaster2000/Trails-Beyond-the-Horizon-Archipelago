@@ -1,4 +1,5 @@
 import asyncio
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -26,6 +27,7 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.5
+SLOW_CALL_SECONDS = 2.0
 # Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
 # Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
 FINAL_BOSS_DEFEATED_FLAG = 32478
@@ -156,7 +158,7 @@ class TBTHContext(CommonContext):
         if save == self.last_save and mtime == self.last_save_mtime:
             return
         try:
-            data = save_reader.decompress_save(save)
+            data = await asyncio.to_thread(save_reader.decompress_save, save)
         except Exception as e:  # the game may still be writing it; try again next poll
             logger.debug(f"Could not read {save}: {e}")
             return
@@ -181,13 +183,23 @@ class TBTHContext(CommonContext):
             self.game_memory = None
             logger.info("Lost the game; waiting for it to start again")
 
+    async def game_io(self, function, *args):
+        """Runs a game-memory call on a worker thread: a slow Windows call must never block the event loop, or the
+        server's keepalive pings go unanswered and it drops the connection (seen in the playtest)."""
+        started = time.monotonic()
+        result = await asyncio.to_thread(function, *args)
+        took = time.monotonic() - started
+        if took > SLOW_CALL_SECONDS:
+            logger.warning(f"Game access {getattr(function, '__name__', function)} took {took:.1f}s")
+        return result
+
     async def sync_with_game(self) -> None:
-        flags = self.game_memory.read_flags()
+        flags = await self.game_io(self.game_memory.read_flags)
         if flags is None or not save_reader.flag_is_set(flags, GAME_STARTED_FLAG, 0):  # title screen, no save loaded
             return
         marker = read_marker(flags)
         if marker == 0:  # a save this client hasn't seen: link it to this seed
-            self.game_memory.write_marker(self.marker)
+            await self.game_io(self.game_memory.write_marker, self.marker)
             logger.info("Linked the loaded save to this seed")
         elif not self.save_is_ours(marker, "The loaded save"):
             return
@@ -196,25 +208,26 @@ class TBTHContext(CommonContext):
         await self.check_goal(flags, 0)
         # The final boss door (after Mirabelle) opens once the goal needs nothing but the boss.
         if not save_reader.flag_is_set(flags, GOAL_DOOR_FLAG, 0) and not goal_requirements_missing(flags, 0, self.goal):
-            self.game_memory.set_flag(GOAL_DOOR_FLAG)
+            await self.game_io(self.game_memory.set_flag, GOAL_DOOR_FLAG)
             logger.info("Goal requirements met: the way to the final boss is open")
 
         # Act items unlock their chapter at once (the gate's "Check again" sees it live).
         for item in self.items_received:
             chapter = STORY_ITEM_CHAPTERS.get(item.item)
             if chapter is not None and not save_reader.flag_is_set(flags, CHAPTER_FLAG_BASE + chapter, offset=0):
-                self.game_memory.set_flag(CHAPTER_FLAG_BASE + chapter)
+                await self.game_io(self.game_memory.set_flag, CHAPTER_FLAG_BASE + chapter)
                 logger.info(f"Unlocked chapter {chapter} in game")
 
         # Received items go straight into the live inventory. The saved counter moves with each one, so a reloaded
         # older save gets everything received after it again.
         pending = deliveries(self.items_received)
-        count = self.game_memory.received_count()
+        count = await self.game_io(self.game_memory.received_count)
         while count < len(pending):
             game_item_id, quantity = pending[count]
-            added = self.game_memory.add_item(game_item_id, quantity, ITEM_STACK_LIMITS.get(game_item_id, 99))
+            added = await self.game_io(self.game_memory.add_item, game_item_id, quantity,
+                                    ITEM_STACK_LIMITS.get(game_item_id, 99))
             count += 1
-            self.game_memory.set_received_count(count)
+            await self.game_io(self.game_memory.set_received_count, count)
             if added:
                 self.popup_backlog.append((game_item_id, added))
             name = GAME_ITEM_NAMES.get(game_item_id, f"item {game_item_id}")
@@ -224,9 +237,9 @@ class TBTHContext(CommonContext):
                 logger.info(f"Received {name} x{quantity}")
 
         # One in-game popup at the next safe moment (chest, conversation) announces the latest arrivals.
-        if self.popup_backlog and not self.game_memory.popup_pending():
+        if self.popup_backlog and not await self.game_io(self.game_memory.popup_pending):
             game_item_id, quantity = self.popup_backlog[0]
-            self.game_memory.queue_popup(game_item_id, quantity, more=len(self.popup_backlog) - 1)
+            await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, len(self.popup_backlog) - 1)
             self.popup_backlog.clear()
 
 
@@ -235,7 +248,7 @@ async def game_watcher(ctx: TBTHContext) -> None:
         if ctx.server and ctx.slot is not None:
             try:
                 if ctx.game_memory is None:
-                    ctx.attach()
+                    await asyncio.to_thread(ctx.attach)
                 if ctx.game_memory is not None:
                     await ctx.sync_with_game()
                 else:

@@ -102,3 +102,31 @@ class TestTitleScreen(unittest.TestCase):
         asyncio.run(run())
         self.assertEqual(written, [])
         self.assertEqual(game.inventory, {})
+
+
+class TestEventLoopStaysFree(unittest.TestCase):
+    def test_slow_game_access_does_not_block(self) -> None:
+        import time
+        from ..Client import TBTHContext
+
+        game = FakeGame()
+        slow_read = game.read_flags
+        game.read_flags = lambda: (time.sleep(0.5), slow_read())[1]  # e.g. Windows stalling during a load
+        ticks = []
+
+        async def run() -> None:
+            ctx = TBTHContext(None, None)
+            ctx.game_memory = game
+            ctx.items_received = []
+            ctx.missing_locations = set()
+
+            async def ticker() -> None:  # stands in for answering the server's keepalive pings
+                for _ in range(5):
+                    ticks.append(time.monotonic())
+                    await asyncio.sleep(0.05)
+
+            await asyncio.gather(ctx.sync_with_game(), ticker())
+
+        asyncio.run(run())
+        self.assertEqual(len(ticks), 5)
+        self.assertLess(ticks[-1] - ticks[0], 0.4)  # kept ticking while the read was still sleeping

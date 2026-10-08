@@ -416,3 +416,12 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (twice). The state pointer is non-null at the title with an empty flag array.
 - Fix: the client only syncs when flag 32000 (Prologue chapter flag) is set. All 27 of the user's saves have it; the
   title state didn't. Test added.
+
+## 2026-10-08: playtest bug: client dropped by keepalive timeout (Western Outskirts)
+- The server log showed Van leaving and rejoining twice ("keepalive ping timeout"); checks were re-sent after the
+  automatic reconnect. CommonClient disables its own pings; MultiServer pings and drops a client that doesn't answer
+  in time. Its event loop was blocked by game-memory calls running on it.
+- Fix: every game-memory call (read/write flags, inventory, attach, save decompress) runs via asyncio.to_thread
+  (TBTHContext.game_io), and calls slower than 2 s are logged as warnings for diagnosis.
+  GOTCHA: CommonContext.game is the game NAME; a method called `game` shadowed it (tests caught it).
+- Also explained to the user: main 4SPG requests are only sent at chapter end (by design); side quests send at once.
