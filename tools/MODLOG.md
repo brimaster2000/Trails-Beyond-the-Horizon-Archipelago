@@ -260,3 +260,21 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - User note for Grim Garten: it's a repeatable, randomly generated (roguelike) dungeon. Checks must count progress
   (Nth chest in a domain, domain clears, …), not fixed chests, and the final build needs adjustable YAML settings for how
   many/what kind of checks it sends.
+
+## 2026-10-08: Grim Garten research (offline)
+- Maps: domain X floors d5X00-d5X30 (12 table chests each, empty item_list = random contents); d5301 is an extra
+  3rd-domain floor; d5X90 = boss arena; d5000-d5030 = hub; d5980/d5990 = 9th domain specials.
+- Engine commands: system[28,…] "free dungeon" (game_*free_dungeon*). There is NO "current domain" getter:
+  identify the domain by map name (map_check_name("d5X..")).
+- Clears:
+  - First (story) clear: each d5X90's story event runs `set_flag(620); game_update_free_dungeon_clear_state(); game_end_free_dungeon();`.
+  - Repeat clears: `FD_BTL_0X_01_END` (boss won) → system.SetFreeDungeonOpen().
+  - SetFreeDungeonOpen itself is a generic "recompute open state" (26 callers) → NOT a clear hook.
+  - sys_event FreeDungeonRuleClear(arg0) is engine-called (no script callers) at the end of a run.
+  - FreeDungeonRuleClearLP = stage (block) clear (only seen called from Floating Isles d0100).
+- Plan:
+  - per-domain counters in our flag range (chests opened, clears), incremented by script hooks;
+  - chests: hook TBoxProcess, domain from map name;
+  - clears: hook each d5X90 at both clear points;
+  - the client turns counters into "Domain X Chest 1..N" / "Domain X Cleared (#k)" checks.
+  - Needs an in-game test run: does a GG chest go through TBoxProcess? Does a first clear also hit FD_BTL_..._01_END (double count)?
