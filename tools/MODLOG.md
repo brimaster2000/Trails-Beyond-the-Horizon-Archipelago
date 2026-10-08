@@ -242,3 +242,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Installed (previous archive backed up as p3a_backup_2026-10-08/script_eng_actI_split.p3a).
   - Verified: user completed Waterworks Bounty (quest 51) from save 40. Live flag 42051 was set, and it was the only quest flag set.
   - User's save 45 = just before finishing that bounty (handy for re-testing).
+
+## 2026-10-08: main 4SPG requests as checks
+- Diagnostic build (temporary): recorded quest_check_state bits 1,2,4,8,16,32 for ChapterEnd's var3..var5,
+  before and after the 4SPG report. Tested by the user on slot 51, end of Act I Part 1 (quests 153/154/155):
+  - before the report: no bits set;
+  - after `quest_report_wait_close()`: bits 2 (completed) and 4 (reported) set.
+  - User's slot 52 = just before the Act I-A → B transition.
+- Hook: `APMainRequestDone(var3/var4/var5)` right after `2119@var var6 = quest_report_wait_close();`
+  sets flag 42000+id if quest_check_state(id, 2). So an optional request that was skipped does not count.
+- 34 of 37 main requests are on a chapter-end report. 152, 172 and 188 are not (UNREPORTED_MAIN_REQUESTS) → not checks.
+- Request 165 is the Intermission (chapter 9): new "Intermission" region, open once Wave 1 (R1/K1/V1) is unlocked.
+  The Prologue request 151 is in the Prologue.
+- Option main_request_checks (default on); location groups "4SPG", "Side Quests", "Main Requests".
+- 61 tests pass; the 2-player seed is 612 items (+34 per player).

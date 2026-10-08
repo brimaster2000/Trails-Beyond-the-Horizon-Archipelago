@@ -44,6 +44,15 @@ class SideQuestChecks(Toggle):
     default = 1
 
 
+class MainRequestChecks(Toggle):
+    """
+    Each story 4SPG request completed by the end of its chapter is a check (34 requests, reported on the
+    chapter-end 4SPG report).
+    """
+    display_name = "Main Request Checks"
+    default = 1
+
+
 class Goal(Choice):
     """
     What unlocks the final boss door in the Finale.
@@ -62,11 +71,12 @@ class trailsbthOptions(PerGameCommonOptions):
     grim_garten_chest_checks: GrimGartenChestChecks
     grim_garten_domain_clears: GrimGartenDomainClears
     side_quest_checks: SideQuestChecks
+    main_request_checks: MainRequestChecks
     goal: Goal
 
 
 option_groups = [
     OptionGroup("Progression", [ActOrder, Goal]),
-    OptionGroup("Checks", [SideQuestChecks]),
+    OptionGroup("Checks", [SideQuestChecks, MainRequestChecks]),
     OptionGroup("Grim Garten", [GrimGartenChestChecks, GrimGartenDomainClears]),
 ]

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from BaseClasses import Region
 
-from .scena_regions import GRIM_GARTEN_DOMAIN_REGIONS, GRIM_GARTEN_DOMAINS, PROLOGUE, STORY_REGIONS
+from .scena_regions import GRIM_GARTEN_DOMAIN_REGIONS, GRIM_GARTEN_DOMAINS, INTERMISSION, PROLOGUE, STORY_REGIONS
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
@@ -18,7 +18,7 @@ def create_and_connect_regions(world: trailsbthWorld) -> None:
     # Every story chapter hangs off the Prologue; the entrance rules in rules.py decide what each one needs.
     prologue = Region(PROLOGUE, world.player, world.multiworld)
     world.multiworld.regions.append(prologue)
-    for name in STORY_REGIONS[1:]:
+    for name in [*STORY_REGIONS[1:], INTERMISSION]:
         region = Region(name, world.player, world.multiworld)
         world.multiworld.regions.append(region)
         prologue.connect(region, f"To {name}")

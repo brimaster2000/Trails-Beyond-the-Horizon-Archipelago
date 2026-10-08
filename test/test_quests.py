@@ -25,7 +25,7 @@ class TestSideQuests(TrailsBTHTestBase):
 
 
 class TestSideQuestsOff(TrailsBTHTestBase):
-    options = {"side_quest_checks": False}
+    options = {"side_quest_checks": False, "main_request_checks": False}
 
     def test_no_quest_locations(self) -> None:
         names = {loc.name for loc in self.multiworld.get_locations(self.player)}
@@ -38,3 +38,31 @@ class TestQuestFlags(TrailsBTHTestBase):
         self.assertEqual(len(set(flags)), len(flags))
         # Mailbox 40000-40032, chapter gate 41000-41019, received counter / seed marker 50000-50063
         self.assertTrue(all(42000 < f < 43000 for f in flags))
+
+
+class TestMainRequests(TrailsBTHTestBase):
+    def test_reported_main_requests_are_locations(self) -> None:
+        from ..locations import MAIN_REQUESTS
+        names = {loc.name for loc in self.multiworld.get_locations(self.player)}
+        self.assertEqual(len(MAIN_REQUESTS), 34)
+        self.assertIn("4SPG - Patrolling the Capital", names)
+        self.assertNotIn("4SPG - Stargazing at the Observatory", names)  # never on a chapter-end report
+
+    def test_prologue_request_is_free(self) -> None:
+        self.assertTrue(self.can_reach_location("4SPG - Taking the VAR-halla Sector by Storm"))
+
+    def test_intermission_request_needs_wave_one(self) -> None:
+        name = "4SPG - Triple Teaming the Third Domain"
+        self.collect_by_name([*ACT_I_PARTS, "Act II - Rean Route 1", "Act II - Kevin Route 1"])
+        self.assertFalse(self.can_reach_location(name))
+        self.collect_by_name("Act II - Van Route 1")
+        self.assertTrue(self.can_reach_location(name))
+
+
+class TestMainRequestsOff(TrailsBTHTestBase):
+    options = {"main_request_checks": False}
+
+    def test_no_main_request_locations(self) -> None:
+        names = {loc.name for loc in self.multiworld.get_locations(self.player)}
+        self.assertNotIn("4SPG - Patrolling the Capital", names)
+        self.assertIn("4SPG - Waterworks Bounty", names)

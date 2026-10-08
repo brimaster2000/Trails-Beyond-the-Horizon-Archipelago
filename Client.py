@@ -14,7 +14,7 @@ from .scena_regions import CHAPTER_IDS
 
 # AP location id -> scenario flag the game sets for it (chest opened, or set by our patch when a quest completes).
 CHEST_LOCATION_FLAGS = {chest.id: chest.flag for chest in CHESTS if chest.flag is not None}
-CHEST_LOCATION_FLAGS |= {quest.id: quest.flag for quest in QUESTS if quest.kind == "side"}
+CHEST_LOCATION_FLAGS |= {quest.id: quest.flag for quest in QUESTS}
 # AP item id -> [(game item id, quantity), ...]. Story items (Acts) give nothing in game yet.
 ITEM_CONTENTS = {ap_id: contents for ap_id, contents in GAME_ITEMS.values()}
 # AP item id of each act item -> the chapter it unlocks.

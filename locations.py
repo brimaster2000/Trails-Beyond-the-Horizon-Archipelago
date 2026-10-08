@@ -35,6 +35,10 @@ for _domain in GRIM_GARTEN_DOMAIN_REGIONS:
 # Quest ids come from tools/build_data.py (30_000_000 + quest id); main requests are listed for id stability only.
 LOCATION_NAME_TO_ID |= {quest.name: quest.id for quest in QUESTS}
 SIDE_QUESTS = [quest for quest in QUESTS if quest.kind == "side"]
+# Main requests are completed by the engine on the chapter-end 4SPG report (ChapterEnd), where the game patch
+# sets their flag. These three are never on a chapter-end report, so they can't be detected that way.
+UNREPORTED_MAIN_REQUESTS = {152, 172, 188}
+MAIN_REQUESTS = [q for q in QUESTS if q.kind == "main" and q.quest_id not in UNREPORTED_MAIN_REQUESTS]
 
 
 def quest_region_name(quest) -> str:
@@ -62,9 +66,10 @@ def create_all_locations(world: trailsbthWorld) -> None:
             names.append(grim_garten_clear_name(domain))
         region.add_locations({name: LOCATION_NAME_TO_ID[name] for name in names}, trailsbthLocation)
 
-    if world.options.side_quest_checks:
-        for quest in SIDE_QUESTS:
-            world.get_region(quest_region_name(quest)).add_locations({quest.name: quest.id}, trailsbthLocation)
+    quests = (SIDE_QUESTS if world.options.side_quest_checks else []) + (
+        MAIN_REQUESTS if world.options.main_request_checks else [])
+    for quest in quests:
+        world.get_region(quest_region_name(quest)).add_locations({quest.name: quest.id}, trailsbthLocation)
 
     world.get_region(FINALE).add_event(
         "Final Boss Defeated", "Victory", location_type=trailsbthLocation, item_type=items.trailsbthItem

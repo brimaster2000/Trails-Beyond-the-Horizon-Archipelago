@@ -24,7 +24,11 @@ class trailsbthWorld(World):
     location_name_to_id = locations.LOCATION_NAME_TO_ID
     item_name_to_id = items.ITEM_NAME_TO_ID
     item_name_groups = {"Acts": set(items.STORY_ITEMS)}
-    location_name_groups = {"4SPG": {quest.name for quest in locations.SIDE_QUESTS}}
+    location_name_groups = {
+        "4SPG": {quest.name for quest in locations.SIDE_QUESTS + locations.MAIN_REQUESTS},
+        "Side Quests": {quest.name for quest in locations.SIDE_QUESTS},
+        "Main Requests": {quest.name for quest in locations.MAIN_REQUESTS},
+    }
 
     origin_region_name = PROLOGUE
 
@@ -54,5 +58,6 @@ class trailsbthWorld(World):
 
     def fill_slot_data(self) -> Mapping[str, Any]:
         return self.options.as_dict(
-            "act_order", "grim_garten_chest_checks", "grim_garten_domain_clears", "side_quest_checks", "goal"
+            "act_order", "grim_garten_chest_checks", "grim_garten_domain_clears", "side_quest_checks",
+            "main_request_checks", "goal"
         )

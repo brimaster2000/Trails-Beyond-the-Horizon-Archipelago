@@ -61,6 +61,16 @@ fn APGrantItems() {
 '''
 CALL_SITE = "\t443@Patch101();\n\t445@return;\n}"
 
+MAIN_REQUEST_HOOK = f'''// Archipelago: a main 4SPG request reported as completed at chapter end sets flag {QUEST_FLAG_BASE} + its id.
+fn APMainRequestDone(arg0: num) {{
+	if arg0 != 0 && quest_check_state(arg0, 2) {{
+		set_flag({QUEST_FLAG_BASE} + arg0);
+	}}
+	return;
+}}
+
+'''
+
 
 def patch_system_ing(source: str) -> str:
     if "fn APGrantItems()" in source:
@@ -71,6 +81,15 @@ def patch_system_ing(source: str) -> str:
     quest_done = "\t13607@quest_set_state(arg0, 2);\n"
     assert source.count(quest_done) == 1, "OnQuestEnd changed; find where it marks the quest complete"
     source = source.replace(quest_done, f"\tset_flag({QUEST_FLAG_BASE} + arg0);\n" + quest_done)
+    # Main requests: the engine marks them completed (state 2) on the chapter-end 4SPG report, so record them
+    # right after it (verified in game: before the report no state bit is set, after it bits 2 and 4 are).
+    report_closed = "\t\t2119@var var6 = quest_report_wait_close();\n"
+    assert source.count(report_closed) == 1, "ChapterEnd changed; find the 4SPG report"
+    source = source.replace(report_closed, report_closed + "".join(
+        f"\t\tAPMainRequestDone({var});\n" for var in ("var3", "var4", "var5")))
+    chapter_end = "fn ChapterEnd(arg0: num = 0) {"
+    assert source.count(chapter_end) == 1
+    source = source.replace(chapter_end, MAIN_REQUEST_HOOK + chapter_end)
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
     return source.replace(anchor, HOOK.lstrip("\n") + anchor, 1)

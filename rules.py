@@ -6,7 +6,9 @@ from BaseClasses import CollectionState
 from worlds.generic.Rules import set_rule
 
 from .regions import grim_garten_region_name
-from .scena_regions import ACT_I_PARTS, ACT_II_ROUTES, ACT_III_ROUTES, GRIM_GARTEN_DOMAIN_REGIONS, WAVES
+from .scena_regions import (
+    ACT_I_PARTS, ACT_II_ROUTES, ACT_III_ROUTES, GRIM_GARTEN_DOMAIN_REGIONS, INTERMISSION, INTERMISSION_AFTER_WAVE, WAVES,
+)
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
@@ -23,6 +25,9 @@ def set_all_rules(world: trailsbthWorld) -> None:
         for route in wave:
             prerequisites[route] = list(earlier)
         earlier += wave
+
+    intermission = [route for wave in WAVES[:INTERMISSION_AFTER_WAVE + 1] for route in wave]
+    set_rule(world.get_entrance(f"To {INTERMISSION}"), lambda state: state.has_all(intermission, player))
 
     for name, needed in prerequisites.items():
         required = [name, *needed]
