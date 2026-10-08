@@ -278,3 +278,20 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - clears: hook each d5X90 at both clear points;
   - the client turns counters into "Domain X Chest 1..N" / "Domain X Cleared (#k)" checks.
   - Needs an in-game test run: does a GG chest go through TBoxProcess? Does a first clear also hit FD_BTL_..._01_END (double count)?
+
+## 2026-10-08: Grim Garten checks (built, not yet verified with the real patch)
+- Diagnostic run (user, save 10, domain 1 repeat run, 5 chests, cleared):
+  - TBoxProcess fired 5 times with domain 1 → GG chests DO use TBoxProcess (contents come from a separate pool);
+    the map-name domain lookup works.
+  - Repeat clear → FD_BTL_01_01_END fired; the story clear point did not (as expected).
+  - sys_event FreeDungeonRuleClear fired with arg0 both true and false (too noisy for counting).
+  - FreeDungeonRuleClearLP fired (stage clear).
+  - Diagnostic flags used 43400-43599 (that save timeline may hold them; harmless).
+- Real patch:
+  - per-domain 8-bit counters at flags 44000 + d*16 (chests) and + 8 (clears);
+  - APGGChestOpened right after `4340@map_obj_tbox_get()`. GOTCHA: the English system.dat tags it 4340; the JP Test copy says 4196, so anchors now match the command, not the tag.
+  - Clears: APGGStoryCleared before every game_update_free_dungeon_clear_state in d5X90 (domain 3 has 4) and
+    APGGBossCleared in FD_BTL_0X_01_END. Guard flag 44200 stops one clear counting twice; reset on map load.
+  - The client turns counters into checks (all reached ids; the server filters to the seed).
+  - New option grim_garten_repeat_clears (0-10) → "… Cleared 2..K+1" (location slot 60+k).
+- 73 tests pass.

@@ -27,6 +27,8 @@ MAILBOX_PENDING_FLAG = 40032
 RECEIVED_COUNTER_FLAG = 50000
 # Act gating (sys_event.dat EV_NEXT_CHAPTER_END): chapter c may start only while flag CHAPTER_FLAG_BASE + c is set.
 CHAPTER_FLAG_BASE = 41000
+# Grim Garten counters kept by the game patch: domain d chests opened at GG_FLAG_BASE + d*16, clears at + 8.
+GG_FLAG_BASE = 44000
 # Which seed + slot a save belongs to, as a 32-bit marker in flags 50032-50063 (0 = not linked yet).
 SEED_MARKER_FLAG = 50032
 

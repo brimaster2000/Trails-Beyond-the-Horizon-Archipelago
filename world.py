@@ -58,6 +58,7 @@ class trailsbthWorld(World):
 
     def fill_slot_data(self) -> Mapping[str, Any]:
         return self.options.as_dict(
-            "act_order", "grim_garten_chest_checks", "grim_garten_domain_clears", "side_quest_checks",
+            "act_order", "grim_garten_chest_checks", "grim_garten_domain_clears", "grim_garten_repeat_clears",
+            "side_quest_checks",
             "main_request_checks", "goal"
         )

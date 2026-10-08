@@ -4,7 +4,8 @@ Builds the Archipelago game patch: a script_eng.p3a with
   flag 42000 + quest id (4SPG checks);
 - t_item.tbl: a new stackable "Archipelago Item" (ARCHIPELAGO_ITEM_ID);
 - t_tbox.tbl: every hand-placed chest gives one Archipelago Item instead of its vanilla contents;
-- sys_event.dat: act gating in EV_NEXT_CHAPTER_END (a chapter starts only once its AP flag is set).
+- sys_event.dat: act gating in EV_NEXT_CHAPTER_END (a chapter starts only once its AP flag is set);
+- system.dat + d5190-d5990.dat: Grim Garten chest and clear counters per domain (flags 44000+).
 Dev-only: Archipelago never imports this.
 
 Usage (GAME = the game's install folder; KUROTOOLS = a KuroTools checkout with tbl2json.py/json2tbl.py/schemas;
@@ -72,11 +73,99 @@ fn APMainRequestDone(arg0: num) {{
 '''
 
 
+# Grim Garten (repeatable random dungeon): per-domain 8-bit counters in flags, which the client turns into checks.
+# Domain d (1-9): chests opened = flags GG_FLAG_BASE + d*16 .. +7, clears = GG_FLAG_BASE + d*16 + 8 .. +15.
+# Verified in game: Grim Garten chests go through system.TBoxProcess, and a repeat clear runs FD_BTL_0d_01_END.
+GG_FLAG_BASE = 44000
+GG_CLEAR_GUARD_FLAG = 44200  # set by a story (first) clear so the boss-win hook doesn't count the same clear twice
+GG_MAPS = {d: [f"d5{d}{floor}0" for floor in "0123"] + [f"d5{d}90"] for d in range(1, 10)}
+GG_MAPS[3].append("d5301")
+GG_MAPS[9].append("d5980")
+
+
+def grim_garten_functions() -> str:
+    domain_checks = "".join(
+        "\tif " + " || ".join(f'map_check_name("{m}")' for m in maps) + f" {{\n\t\treturn {d};\n\t}}\n"
+        for d, maps in GG_MAPS.items())
+    return f'''// Archipelago Grim Garten: which domain the current map belongs to (0 = not in the Grim Garten).
+fn APGGDomain() {{
+{domain_checks}	return 0;
+}}
+
+// Adds 1 to the 8-bit counter stored in flags arg0 .. arg0 + 7 (stops at 255).
+fn APInc8(arg0: num) {{
+	var i = 0;
+	var j = 0;
+	while i < 8 {{
+		if !flag(arg0 + i) {{
+			set_flag(arg0 + i);
+			while j < i {{
+				reset_flag(arg0 + j);
+				j = j + 1;
+			}}
+			return;
+		}}
+		i = i + 1;
+	}}
+	return;
+}}
+
+fn APGGChestOpened() {{
+	var domain = APGGDomain();
+	if domain > 0 {{
+		APInc8({GG_FLAG_BASE} + domain * 16);
+	}}
+	return;
+}}
+
+// First clear of a domain (story event).
+fn APGGStoryCleared(arg0: num) {{
+	APInc8({GG_FLAG_BASE} + arg0 * 16 + 8);
+	set_flag({GG_CLEAR_GUARD_FLAG});
+	return;
+}}
+
+// Boss of a domain run defeated (repeat clears).
+fn APGGBossCleared(arg0: num) {{
+	if !flag({GG_CLEAR_GUARD_FLAG}) {{
+		APInc8({GG_FLAG_BASE} + arg0 * 16 + 8);
+	}}
+	reset_flag({GG_CLEAR_GUARD_FLAG});
+	return;
+}}
+
+'''
+
+
+def patch_boss_ing(source: str, domain: int) -> str:
+    """d5X90: count the story (first) clear(s) and the repeatable boss win."""
+    lines = source.split("\n")
+    hits = 0
+    for i, line in enumerate(lines):
+        if line.strip().endswith("game_update_free_dungeon_clear_state();"):
+            indent = line[:len(line) - len(line.lstrip("\t"))]
+            lines[i] = f"{indent}system.APGGStoryCleared({domain});\n{line}"
+            hits += 1
+    assert hits >= 1, f"d5{domain}90: no story clear found"
+    source = "\n".join(lines)
+    boss_won = f"fn FD_BTL_0{domain}_01_END() {{\n"
+    assert source.count(boss_won) == 1, f"d5{domain}90: boss win handler changed"
+    return source.replace(boss_won, boss_won + f"\tsystem.APGGBossCleared({domain});\n")
+
+
 def patch_system_ing(source: str) -> str:
     if "fn APGrantItems()" in source:
         raise SystemExit("system.dat already has the Archipelago hook; pass an unpatched script_eng.p3a as SOURCE")
     assert source.count(CALL_SITE) == 1, "OnMapReinit changed; find a new call site"
-    source = source.replace(CALL_SITE, "\t443@Patch101();\n\tAPGrantItems();\n\t445@return;\n}")
+    source = source.replace(
+        CALL_SITE, f"\t443@Patch101();\n\tAPGrantItems();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
+    # Grim Garten chests: count right after the chest's contents are handed over.
+    tbox_lines = [line for line in source.split("\n") if line.endswith("@map_obj_tbox_get();")]
+    assert len(tbox_lines) == 1, "TBoxProcess changed; find map_obj_tbox_get"
+    source = source.replace(tbox_lines[0] + "\n", tbox_lines[0] + "\n\t\tAPGGChestOpened();\n")
+    tbox_fn = "fn TBoxProcess(arg0: num, arg1: num) {"
+    assert source.count(tbox_fn) == 1
+    source = source.replace(tbox_fn, grim_garten_functions() + tbox_fn)
     # 4SPG checks: every side quest, topic quest and bounty completes through OnQuestEnd(quest id).
     quest_done = "\t13607@quest_set_state(arg0, 2);\n"
     assert source.count(quest_done) == 1, "OnQuestEnd changed; find where it marks the quest complete"
@@ -257,6 +346,14 @@ def main(game: Path, kurotools: Path, work: Path, source_archive: Path) -> None:
     (work / "sys_event_ap.ing").write_text(
         patch_sys_event_ing((work / "sys_event.ing").read_text(encoding="utf-8")), encoding="utf-8")
     run(game / "ingert.exe", "-o", sys_event_dat, work / "sys_event_ap.ing")
+
+    for domain in range(1, 10):
+        boss_dat = extracted / "script_eng" / "scena" / f"d5{domain}90.dat"
+        boss_ing = work / f"d5{domain}90.ing"
+        run(game / "ingert.exe", "-o", boss_ing, boss_dat)
+        patched = work / f"d5{domain}90_ap.ing"
+        patched.write_text(patch_boss_ing(boss_ing.read_text(encoding="utf-8"), domain), encoding="utf-8")
+        run(game / "ingert.exe", "-o", boss_dat, patched)
 
     tables = extracted / "table_eng"
     patch_table(kurotools, work, tables / "t_item.tbl", add_archipelago_item)

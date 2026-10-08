@@ -28,6 +28,11 @@ def flag_is_set(save: bytes, flag: int, offset: int = FLAG_ARRAY_OFFSET) -> bool
     return bool(save[offset + flag // 8] >> (flag % 8) & 1)
 
 
+def read_counter8(flags: bytes, first_flag: int, offset: int = FLAG_ARRAY_OFFSET) -> int:
+    """An 8-bit counter kept by the game patch in flags first_flag .. first_flag + 7 (lowest bit first)."""
+    return sum(flag_is_set(flags, first_flag + i, offset) << i for i in range(8))
+
+
 def newest_save(save_dir: Path = DEFAULT_SAVE_DIR) -> Path | None:
     saves = list(save_dir.glob("save*/user.dat"))
     return max(saves, key=lambda p: p.stat().st_mtime_ns) if saves else None

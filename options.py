@@ -19,7 +19,8 @@ class ActOrder(Choice):
 
 class GrimGartenChestChecks(Range):
     """
-    The first N chests opened in each Grim Garten domain are checks.
+    The first N chests opened in each Grim Garten domain are checks. Chests are counted across every run of the
+    domain (the Grim Garten is a repeatable random dungeon), so "Chest 3" is simply your third chest there.
     """
     display_name = "Grim Garten Chest Checks"
     range_start = 0
@@ -33,6 +34,17 @@ class GrimGartenDomainClears(Toggle):
     """
     display_name = "Grim Garten Domain Clears"
     default = 1
+
+
+class GrimGartenRepeatClears(Range):
+    """
+    The Grim Garten can be replayed: clearing a domain again gives a check, up to this many extra clears per domain
+    ("Cleared 2", "Cleared 3", ...). Counts every clear, so it works with any order of runs.
+    """
+    display_name = "Grim Garten Repeat Clears"
+    range_start = 0
+    range_end = 10
+    default = 0
 
 
 class SideQuestChecks(Toggle):
@@ -70,6 +82,7 @@ class trailsbthOptions(PerGameCommonOptions):
     act_order: ActOrder
     grim_garten_chest_checks: GrimGartenChestChecks
     grim_garten_domain_clears: GrimGartenDomainClears
+    grim_garten_repeat_clears: GrimGartenRepeatClears
     side_quest_checks: SideQuestChecks
     main_request_checks: MainRequestChecks
     goal: Goal
@@ -78,5 +91,5 @@ class trailsbthOptions(PerGameCommonOptions):
 option_groups = [
     OptionGroup("Progression", [ActOrder, Goal]),
     OptionGroup("Checks", [SideQuestChecks, MainRequestChecks]),
-    OptionGroup("Grim Garten", [GrimGartenChestChecks, GrimGartenDomainClears]),
+    OptionGroup("Grim Garten", [GrimGartenChestChecks, GrimGartenDomainClears, GrimGartenRepeatClears]),
 ]

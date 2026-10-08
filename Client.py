@@ -9,7 +9,9 @@ from CommonClient import CommonContext, gui_enabled, logger, server_loop, get_ba
 from . import save_reader
 from .data import CHESTS, GAME_ITEMS, QUESTS
 from .items import ITEM_NAME_TO_ID
-from .game_memory import CHAPTER_FLAG_BASE, read_marker, seed_marker
+from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, read_marker, seed_marker
+from .locations import grim_garten_chest_id, grim_garten_clear_id
+from .options import GrimGartenChestChecks, GrimGartenRepeatClears
 from .scena_regions import CHAPTER_IDS
 
 # AP location id -> scenario flag the game sets for it (chest opened, or set by our patch when a quest completes).
@@ -20,6 +22,17 @@ ITEM_CONTENTS = {ap_id: contents for ap_id, contents in GAME_ITEMS.values()}
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.5
+
+
+def grim_garten_checks(flags: bytes, offset: int) -> set[int]:
+    """Locations reached by the per-domain chest/clear counters; the server only counts those in the seed."""
+    found = set()
+    for domain in range(1, 10):
+        chests = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16, offset)
+        clears = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16 + 8, offset)
+        found |= {grim_garten_chest_id(domain, n) for n in range(1, min(chests, GrimGartenChestChecks.range_end) + 1)}
+        found |= {grim_garten_clear_id(domain, k) for k in range(1, min(clears, GrimGartenRepeatClears.range_end + 1) + 1)}
+    return found
 
 
 def deliveries(items_received) -> list[tuple[int, int]]:
@@ -105,7 +118,8 @@ class TBTHContext(CommonContext):
         self.last_save, self.last_save_mtime = save, mtime
         # Only saves the client has linked to this seed; anything else may be another playthrough.
         if self.save_is_ours(read_marker(data[save_reader.FLAG_ARRAY_OFFSET:]), save.parent.name):
-            await self.report_checks(save_reader.checked_locations(data, CHEST_LOCATION_FLAGS), save.parent.name)
+            await self.report_checks(save_reader.checked_locations(data, CHEST_LOCATION_FLAGS)
+                                     | grim_garten_checks(data, save_reader.FLAG_ARRAY_OFFSET), save.parent.name)
 
     def attach(self) -> None:
         from . import game_memory
@@ -131,7 +145,8 @@ class TBTHContext(CommonContext):
             logger.info("Linked the loaded save to this seed")
         elif not self.save_is_ours(marker, "The loaded save"):
             return
-        await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0), "game")
+        await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
+                                 | grim_garten_checks(flags, 0), "game")
 
         # Act items unlock their chapter at once (the gate's "Check again" sees it live).
         for item in self.items_received:
