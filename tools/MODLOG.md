@@ -371,7 +371,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   domains would make the goal impossible if there's no post-game. Needs an in-game "final boss door" gate
   (e.g. at the start of EV_04_14_00 in d8020) driven by a client-set flag.
 
-## 2026-10-08: final boss door (built, testing)
+## 2026-10-08: final boss door (VERIFIED in game after 5 attempts)
 - User pointed to the door that opens after beating Mirabelle. It's d8020 EV_door07, the way into the "central
   compartment" (EV_04_12_00, flag 32443) and on to the last bosses.
   - OBJECT_setting swaps the locked EV_door07d ("lock1") for the open EV_door07 ("reiease1") when flag 32441 (after the
@@ -403,3 +403,10 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (scale 10x5x0.5) at (−0.1, 3.27, −238); the corridor runs from door05 (z −219). The game's own scene places the
   party at y 2.0, z −237..−240, facing 180 (inward). Push-back: leader (0, 2.0, −230) facing 0; followers 65050-65052
   just behind. No script command reads the player position, so the coordinates are fixed.
+- VERIFIED (attempt 5, save000): without 41020 → message, cross-fade, party back in the corridor, no loop, no
+  fight, 32443 stays off. With 41020 set → walking in starts "Entering the central compartment" normally.
+- Lessons:
+  (1) story events here start from EventBoxes, not door models;
+  (2) the engine re-enables boxes after map setup;
+  (3) the engine still calls <event>_END (EVENT_NEXT chains) after a box handler returns early, so guard both;
+  (4) refusing a box must move the player out of it, or it re-fires forever.
