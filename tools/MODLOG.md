@@ -279,7 +279,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - the client turns counters into "Domain X Chest 1..N" / "Domain X Cleared (#k)" checks.
   - Needs an in-game test run: does a GG chest go through TBoxProcess? Does a first clear also hit FD_BTL_..._01_END (double count)?
 
-## 2026-10-08: Grim Garten checks (built, not yet verified with the real patch)
+## 2026-10-08: Grim Garten checks (VERIFIED in game)
 - Diagnostic run (user, save 10, domain 1 repeat run, 5 chests, cleared):
   - TBoxProcess fired 5 times with domain 1 → GG chests DO use TBoxProcess (contents come from a separate pool);
     the map-name domain lookup works.
@@ -295,3 +295,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - The client turns counters into checks (all reached ids; the server filters to the seed).
   - New option grim_garten_repeat_clears (0-10) → "… Cleared 2..K+1" (location slot 60+k).
 - 73 tests pass.
+- Installed (replacing the diagnostic). Verified: save 10, domain 1 run with 2 chests + clear →
+  counters: domain 1 chests 2, clears 1; guard 44200 back to 0.
+  - The chest on the domain-select hub (d5000-d5030) is not counted (no domain). Possible future "hub chest" check.
+- Not yet tested: a story FIRST clear (double-count guard). Needs a save before a domain's story clear.
