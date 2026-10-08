@@ -149,6 +149,7 @@ class TBTHContext(CommonContext):
         if cmd == "LocationInfo":
             for item in args["locations"]:
                 self.scouted[item.location] = item
+            logger.info(f"Learned what {len(args['locations'])} locations hold (for the in-game chest popups)")
         if cmd == "Connected":
             # Learn what every location holds, so a chest's popup can show its own contents at once.
             locations = list(set(args.get("missing_locations", [])) | set(args.get("checked_locations", [])))
