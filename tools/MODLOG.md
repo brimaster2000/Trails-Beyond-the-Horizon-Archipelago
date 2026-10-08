@@ -256,3 +256,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   The Prologue request 151 is in the Prologue.
 - Option main_request_checks (default on); location groups "4SPG", "Side Quests", "Main Requests".
 - 61 tests pass; the 2-player seed is 612 items (+34 per player).
+- VERIFIED in game with the real patch (slot 51 → end of Act I Part 1): flags 42153/42154/42155 set, no other main flags.
+- User note for Grim Garten: it's a repeatable, randomly generated (roguelike) dungeon. Checks must count progress
+  (Nth chest in a domain, domain clears, …), not fixed chests, and the final build needs adjustable YAML settings for how
+  many/what kind of checks it sends.
