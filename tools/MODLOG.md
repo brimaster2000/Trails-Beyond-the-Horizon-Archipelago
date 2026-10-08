@@ -438,3 +438,14 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   11 background power throttling (EcoQoS / Efficiency mode; Microsoft Store Python).
   Fix: opt_out_of_power_throttling() → SetProcessInformation(ProcessPowerThrottling, ControlMask EXECUTION_SPEED |
   IGNORE_TIMER_RESOLUTION, StateMask 0) at client start; it returned 1. NOT YET VERIFIED in the playtest.
+- ROOT CAUSE FOUND with faulthandler stack dumps (logs/TBTHClient_stalls.txt): in all 8 stalls the main thread was in
+  kivy, Window.on_draw (6) or Label.texture_update (2). Drawing the GUI blocks on the GPU while the fullscreen game
+  holds it, until the game pauses or loads (user: "checks only send when I pause / load a new area"). The worker-thread
+  reads stalled too because the blocked draw call holds the GIL.
+  - The Windows-throttling theory was wrong (the opt-out stays; it's harmless).
+  - The probe (same reads, no GUI) never stalled.
+  - The "--nogui" text client still had the GUI, because CommonClient only reads sys.argv for --nogui.
+- Fixes:
+  - launch() honours --nogui passed as an argument;
+  - the GUI client sets kivy vsync 0 / maxfps 20 to draw less (effect unverified).
+  - Recommended for now: the text client, or the game in borderless-windowed mode.

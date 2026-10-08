@@ -30,6 +30,7 @@ STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPT
 POLL_SECONDS = 0.5
 SLOW_CALL_SECONDS = 2.0
 LOOP_LAG_WARNING_SECONDS = 2.0
+STACK_DUMP_SECONDS = 3.0
 # Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
 # Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
 FINAL_BOSS_DEFEATED_FLAG = 32478
@@ -95,6 +96,14 @@ class TBTHContext(CommonContext):
 
     def run_gui(self):
         """Import kivy UI system and start running it as self.ui_task."""
+        # Drawing the window waits on the GPU, which a fullscreen game can hold for many seconds; that froze the
+        # whole client in the playtest (every stall dump was inside kivy on_draw / texture_update). Draw less.
+        try:
+            from kivy.config import Config
+            Config.set("graphics", "vsync", "0")
+            Config.set("graphics", "maxfps", "20")
+        except Exception as e:
+            logger.debug(f"Could not adjust kivy graphics settings: {e}")
         from kvui import GameManager
 
         class TBTHManager(GameManager):
@@ -287,12 +296,21 @@ def opt_out_of_power_throttling() -> None:
 
 async def loop_watchdog(ctx: TBTHContext, seconds: float = 1.0) -> None:
     """Logs when the event loop wakes up late: a blocked loop can't answer the server's keepalive pings."""
+    import faulthandler
+    import Utils
+
+    # If the loop goes STACK_DUMP_SECONDS without checking in, Python writes every thread's stack to this file.
+    stack_file = open(Utils.user_path("logs", "TBTHClient_stalls.txt"), "a", encoding="utf-8")
     while not ctx.exit_event.is_set():
+        faulthandler.dump_traceback_later(STACK_DUMP_SECONDS, repeat=False, file=stack_file)
         started = time.monotonic()
         await asyncio.sleep(seconds)
+        faulthandler.cancel_dump_traceback_later()
         late = time.monotonic() - started - seconds
         if late > LOOP_LAG_WARNING_SECONDS:
             logger.warning(f"Event loop was blocked for {late:.1f}s")
+            stack_file.write(f"--- stall of {late:.1f}s ended at {time.strftime('%H:%M:%S')} ---\n")
+            stack_file.flush()
 
 
 def launch(*launch_args: str):
@@ -308,7 +326,8 @@ def launch(*launch_args: str):
         if args.save_dir:
             ctx.save_dir = Path(args.save_dir)
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="TBTHServerLoop")
-        if gui_enabled:
+        # CommonClient only checks sys.argv for --nogui; this client may be launched with arguments.
+        if gui_enabled and "--nogui" not in launch_args:
             ctx.run_gui()
         ctx.run_cli()
         watcher = asyncio.create_task(game_watcher(ctx), name="TBTHGameWatcher")
