@@ -5,13 +5,14 @@ from typing import Optional
 import colorama
 
 from CommonClient import CommonContext, gui_enabled, logger, server_loop, get_base_parser, ClientCommandProcessor, handle_url_arg
+from NetUtils import ClientStatus
 
 from . import save_reader
 from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
 from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, read_marker, seed_marker
 from .locations import grim_garten_chest_id, grim_garten_clear_id
-from .options import GrimGartenChestChecks, GrimGartenRepeatClears
+from .options import Goal, GrimGartenChestChecks, GrimGartenRepeatClears
 from .scena_regions import CHAPTER_IDS
 
 # AP location id -> scenario flag the game sets for it (chest opened, or set by our patch when a quest completes).
@@ -25,6 +26,19 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.5
+# Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
+# Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
+FINAL_BOSS_DEFEATED_FLAG = 32478
+
+
+def missing_for_goal(flags: bytes, offset: int, goal: int) -> list[str] | None:
+    """None until the final boss is beaten; then what the goal still needs ([] = goal complete)."""
+    if not save_reader.flag_is_set(flags, FINAL_BOSS_DEFEATED_FLAG, offset):
+        return None
+    if goal != Goal.option_all_acts_and_grim_garten:
+        return []
+    return [f"Grim Garten domain {domain}" for domain in range(1, 10)
+            if save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16 + 8, offset) == 0]
 
 
 def grim_garten_checks(flags: bytes, offset: int) -> set[int]:
@@ -64,6 +78,8 @@ class TBTHContext(CommonContext):
         self.game_memory = None  # game_memory.GameMemory while attached to kai.exe
         self.warned_marker = 0  # marker of a foreign save we already warned about
         self.popup_backlog: list[tuple[int, int]] = []  # delivered items not yet announced in game
+        self.goal = Goal.default
+        self.goal_missing: list[str] | None = None  # last reported, to avoid repeating the log line
 
     def run_gui(self):
         """Import kivy UI system and start running it as self.ui_task."""
@@ -99,6 +115,23 @@ class TBTHContext(CommonContext):
                            f"or start a new game.")
         return False
 
+    def on_package(self, cmd: str, args: dict) -> None:
+        super().on_package(cmd, args)
+        if cmd == "Connected":
+            self.goal = args.get("slot_data", {}).get("goal", Goal.default)
+
+    async def check_goal(self, flags: bytes, offset: int) -> None:
+        if self.finished_game:
+            return
+        missing = missing_for_goal(flags, offset, self.goal)
+        if missing == []:
+            await self.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
+            self.finished_game = True
+            logger.info("Goal complete! The final boss has been defeated.")
+        elif missing and missing != self.goal_missing:
+            logger.info("Final boss defeated, but the goal still needs: " + ", ".join(missing))
+        self.goal_missing = missing
+
     async def report_checks(self, found: set[int], source: str) -> None:
         found = (found & self.missing_locations) - self.locations_checked
         if found:
@@ -124,6 +157,7 @@ class TBTHContext(CommonContext):
         if self.save_is_ours(read_marker(data[save_reader.FLAG_ARRAY_OFFSET:]), save.parent.name):
             await self.report_checks(save_reader.checked_locations(data, CHEST_LOCATION_FLAGS)
                                      | grim_garten_checks(data, save_reader.FLAG_ARRAY_OFFSET), save.parent.name)
+            await self.check_goal(data, save_reader.FLAG_ARRAY_OFFSET)
 
     def attach(self) -> None:
         from . import game_memory
@@ -151,6 +185,7 @@ class TBTHContext(CommonContext):
             return
         await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
                                  | grim_garten_checks(flags, 0), "game")
+        await self.check_goal(flags, 0)
 
         # Act items unlock their chapter at once (the gate's "Check again" sees it live).
         for item in self.items_received:

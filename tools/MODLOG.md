@@ -359,3 +359,14 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   sys_event lacks preludes for savedata_* → added (system[17,4], system[17,5]).
 - VERIFIED: save 52 → Act I-B lock menu → Save into slot 34 → Return to title → load slot 34 → back at the
   Act I-B lock menu, which keeps working. Installed (previous build backed up as script_eng_popup.p3a).
+
+## 2026-10-08: goal detection (final boss)
+- t_evtable: each story event has a completion flag (long2). Finale: EV_04_14_00 "Last Boss Battle with White Grendel"
+  (32473), BTL1-4 (32474-32477), **EV_04_14_01 "After the battle, Grendel ... leaves" = flag 32478**.
+- Verified on real saves: save002 "Before the Final Battle" has 32472 but not 32473/32478; save235 "Clear Data" has 32478.
+- Client: on Connected it reads slot_data["goal"]; each poll (live memory or the save fallback), once 32478 is set:
+  - all_acts → sends StatusUpdate CLIENT_GOAL once (finished_game; CommonClient re-sends it on reconnect);
+  - all_acts_and_grim_garten → also needs every domain's clear counter ≥ 1, and logs what's missing until then.
+- OPEN: the game does NOT lock the final boss. With the Grim Garten goal, beating the boss before clearing all
+  domains would make the goal impossible if there's no post-game. Needs an in-game "final boss door" gate
+  (e.g. at the start of EV_04_14_00 in d8020) driven by a client-set flag.
