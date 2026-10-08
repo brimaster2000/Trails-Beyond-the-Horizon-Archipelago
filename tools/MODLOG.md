@@ -312,3 +312,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - A. client writes the inventory in memory (live, silent; needs the inventory layout);
   - B. a native DLL calling the script VM (live + popup; big);
   - C. a popup in a known-safe script context (chest open / talk end).
+
+## 2026-10-08: live inventory FOUND (for live item delivery)
+- User provided counts (save 10): Teara Balm(2)=21, Tearal Balm(3)=4, EP Charge II(6)=10, Reviving Balm(10)=34,
+  S-Tablet(30)=38, Curia Balm(31)=24.
+- Layout: **array indexed by item id, 4 bytes per item: u16 count, u16 flags** (flags seen: 0x07 owned, 0x0f after
+  buying = probably "new", 0x03).
+  - In saves at offset 0x1BB4B0 (save010: id2=21, id10=33 …).
+- Live: **inventory = [kai.exe + 0xD60250] + 0x1BB4C0** (object vtable 0x140B50BE8; it holds a save image with a 0x10 header).
+  - Another copy at [kai.exe+0xD5FE40] + 0x1D8F38 (heap vtable) did NOT change when written: not the one the menu reads.
+- VERIFIED: wrote Teara Balm 21→22 in the main object; the in-game item menu showed 22.
+- Dead ends on the way:
+  - (value,type) pair list at save 0x1BB4A8 (it was this array, misread);
+  - a value scan for one count (needed several known counts and the id-indexed hypothesis);
+  - a save-vs-state-object diff (the inventory isn't in the flag/state object).
