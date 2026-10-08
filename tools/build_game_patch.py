@@ -149,7 +149,7 @@ fn APGGBossCleared(arg0: num) {{
 '''
 
 
-# Final boss door: d8020's EV_door07 (into the central compartment, the way to the last bosses) normally opens once
+# Final boss door: in d8020 the way to the last bosses (the EV_04_12_00 trigger into the central compartment) opens once
 # Mirabelle is beaten (flag 32441). It now also needs GOAL_DOOR_FLAG, which the client sets once the goal
 # requirements other than the final boss are met. Verified on saves: the 9th Grim Garten domain's finale part is
 # played between beating Mirabelle and entering the compartment, so a Grim Garten goal can always be finished.
@@ -157,9 +157,14 @@ GOAL_DOOR_FLAG = 41020
 
 
 def patch_final_door_ing(source: str) -> str:
-    door = "\t\t140@if flag(32441) {\n"
-    assert source.count(door) == 1, "d8020 OBJECT_setting changed; find the EV_door07 release"
-    source = source.replace(door, f"\t\t140@if flag(32441) && flag({GOAL_DOOR_FLAG}) {{\n")
+    # The last stretch starts from the EventBox "EV_04_12_00" (d8020_sys.json), not from a door object: locking the
+    # EV_door07 model did nothing in game. Switch the trigger box off at the end of OBJECT_setting (run by Reinit
+    # on every load of this floor) while the goal flag is missing.
+    setup_end = "\t174@return;\n"
+    assert source.count(setup_end) == 1, "d8020 OBJECT_setting changed; find its return"
+    source = source.replace(setup_end, f"\tif !flag({GOAL_DOOR_FLAG}) {{\n"
+                                       '\t\tmap_event_box_set_enable("EV_04_12_00", 0);\n'
+                                       "\t}\n" + setup_end)
     talk_end = "\t333@TALK_END();\n"
     assert source.count(talk_end) == 1, "d8020 TK_MIRABEL changed"
     sealed = (f"\tif flag(32441) && !flag({GOAL_DOOR_FLAG}) {{\n"

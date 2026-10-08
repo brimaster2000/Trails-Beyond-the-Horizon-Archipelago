@@ -382,3 +382,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Patch: `140@if flag(32441)` → `if flag(32441) && flag(41020)`, plus a TK_MIRABEL line explaining the seal.
 - Client: sets 41020 when goal_requirements_missing() is empty (all_acts: immediately; GG goal: every domain cleared).
   The door is set up at map load, so after meeting the requirements you re-enter the floor.
+- FAILED in game (user, save000): locking the EV_door07 model did not stop entry; the user walked into the last boss.
+  The last stretch is started by an EventBox "EV_04_12_00" (d8020_sys.json Actor, type EventBox), not by EV_door07.
+- New approach: door model reverted to vanilla. At the end of d8020 OBJECT_setting (run by Reinit on every load):
+  `if !flag(41020) { map_event_box_set_enable("EV_04_12_00", 0); }`. The Mirabelle message is kept.
