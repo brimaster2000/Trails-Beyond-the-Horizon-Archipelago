@@ -449,3 +449,4 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - launch() honours --nogui passed as an argument;
   - the GUI client sets kivy vsync 0 / maxfps 20 to draw less (effect unverified).
   - Recommended for now: the text client, or the game in borderless-windowed mode.
+- VERIFIED (user, text client without GUI): checks send immediately without pausing; no stalls, no disconnects.
