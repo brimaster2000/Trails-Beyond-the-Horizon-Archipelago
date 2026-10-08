@@ -450,3 +450,6 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - the GUI client sets kivy vsync 0 / maxfps 20 to draw less (effect unverified).
   - Recommended for now: the text client, or the game in borderless-windowed mode.
 - VERIFIED (user, text client without GUI): checks send immediately without pausing; no stalls, no disconnects.
+- Playtest "GG chests need a pause": a monitor showed the counter increments within 0.5 s of opening (domain 2: 3→4).
+  The 4th chest isn't a location (grim_garten_chest_checks = 3). The earlier delays were the GUI freeze.
+  Client now logs "Grim Garten domain N: chest K opened (this seed has M chest checks per domain)" past the limit.

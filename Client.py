@@ -92,6 +92,8 @@ class TBTHContext(CommonContext):
         self.warned_marker = 0  # marker of a foreign save we already warned about
         self.popup_backlog: list[tuple[int, int]] = []  # delivered items not yet announced in game
         self.goal = Goal.default
+        self.grim_garten_chest_checks = GrimGartenChestChecks.default
+        self.grim_garten_seen: dict[int, int] = {}  # domain -> chests counted, to explain chests past the checks
         self.goal_missing: list[str] | None = None  # last reported, to avoid repeating the log line
 
     def run_gui(self):
@@ -140,6 +142,8 @@ class TBTHContext(CommonContext):
         super().on_package(cmd, args)
         if cmd == "Connected":
             self.goal = args.get("slot_data", {}).get("goal", Goal.default)
+            self.grim_garten_chest_checks = args.get("slot_data", {}).get(
+                "grim_garten_chest_checks", GrimGartenChestChecks.default)
 
     async def check_goal(self, flags: bytes, offset: int) -> None:
         if self.finished_game:
@@ -152,6 +156,15 @@ class TBTHContext(CommonContext):
         elif missing and missing != self.goal_missing:
             logger.info("Final boss defeated, but the goal still needs: " + ", ".join(missing))
         self.goal_missing = missing
+
+    def explain_extra_grim_garten_chests(self, flags: bytes) -> None:
+        for domain in range(1, 10):
+            count = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16, 0)
+            seen = self.grim_garten_seen.setdefault(domain, count)
+            if count > seen and count > self.grim_garten_chest_checks:
+                logger.info(f"Grim Garten domain {domain}: chest {count} opened (this seed has "
+                            f"{self.grim_garten_chest_checks} chest checks per domain)")
+            self.grim_garten_seen[domain] = count
 
     async def report_checks(self, found: set[int], source: str) -> None:
         found = (found & self.missing_locations) - self.locations_checked
@@ -217,6 +230,7 @@ class TBTHContext(CommonContext):
         await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
                                  | grim_garten_checks(flags, 0), "game")
         await self.check_goal(flags, 0)
+        self.explain_extra_grim_garten_chests(flags)
         # The final boss door (after Mirabelle) opens once the goal needs nothing but the boss.
         if not save_reader.flag_is_set(flags, GOAL_DOOR_FLAG, 0) and not goal_requirements_missing(flags, 0, self.goal):
             await self.game_io(self.game_memory.set_flag, GOAL_DOOR_FLAG)
