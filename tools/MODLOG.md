@@ -349,3 +349,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - GOTCHA: loading a save restores that save's flags, so a queued popup is dropped (and old saves can contain a stale
   pending mailbox from the pre-live delivery era, e.g. save 42 had Time Sepith x300 pending; the new patch never
   item_adds it). The client re-queues popups only for items it delivers.
+
+## 2026-10-08: "Save" option in the lock menu (built, testing)
+- Event 10 = EV_NEXT_CHAPTER (sys_event, "end-of-chapter event"); our gate runs in its EV_NEXT_CHAPTER_END.
+- How the game resumes chapter-end saves: ChapterEnd sets flag 25 before the save menu, and system.OnMapReinit runs
+  `if flag(25) { OnChapterChange(); }` → EVENT_NEXT(10) → back into EV_NEXT_CHAPTER_END.
+- Lock menu option "Save" (value 3): set_flag(25); savedata_capture_thumbnail(); savedata_inter_save_menu(0);
+  reset_flag(25). Loading that save should re-run the gate (global_work(12) is still the finished chapter).
+  sys_event lacks preludes for savedata_* → added (system[17,4], system[17,5]).

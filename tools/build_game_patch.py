@@ -231,7 +231,8 @@ fn APChapterUnlocked(arg0: num) {{
 	return 0;
 }}
 
-// Shows the lock message and a menu. Returns 0 = choose another route, 1 = check again (2 = title never returns).
+// Shows the lock message and a menu. Returns 0 = choose another route, 1 = check again, 3 = saved
+// (2 = title never returns).
 fn APLockedMenu(arg0: num, arg1: num) {{
 	var name = "";
 {names}
@@ -243,6 +244,7 @@ fn APLockedMenu(arg0: num, arg1: num) {{
 		menu_additem(1, "Choose another route", 0);
 	}}
 	menu_additem(1, "Check again", 1);
+	menu_additem(1, "Save", 3);
 	menu_additem(1, "Return to title", 2);
 	menu_open(1, -1, -1);
 	var choice = menu_wait(1);
@@ -254,6 +256,14 @@ fn APLockedMenu(arg0: num, arg1: num) {{
 	}}
 	if choice == 2 {{
 		game_return_to_title();
+	}}
+	// Save like the chapter end does: with flag 25 set, loading this save runs OnChapterChange -> event 10
+	// (EV_NEXT_CHAPTER) again, so it resumes at this lock check instead of skipping past it.
+	if choice == 3 {{
+		set_flag(25);
+		savedata_capture_thumbnail();
+		savedata_inter_save_menu(0);
+		reset_flag(25);
 	}}
 	return choice;
 }}
@@ -301,8 +311,13 @@ def patch_sys_event_ing(source: str) -> str:
     anchor = "fn EV_NEXT_CHAPTER_END() {"
     assert source.count(anchor) == 1
     source = source.replace(anchor, gate_functions() + anchor, 1)
-    if "prelude fn game_return_to_title" not in source:
-        source = "prelude fn game_return_to_title = system[28,2]();\n" + source
+    # Commands sys_event.dat doesn't declare itself (same ids as in system.dat).
+    for name, prelude in (
+            ("game_return_to_title", "prelude fn game_return_to_title = system[28,2]();\n"),
+            ("savedata_capture_thumbnail", "prelude fn savedata_capture_thumbnail = system[17,4]();\n"),
+            ("savedata_inter_save_menu", "prelude fn savedata_inter_save_menu = system[17,5](num);\n")):
+        if f"prelude fn {name} " not in source:
+            source = prelude + source
     return source
 
 
