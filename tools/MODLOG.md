@@ -386,3 +386,8 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   The last stretch is started by an EventBox "EV_04_12_00" (d8020_sys.json Actor, type EventBox), not by EV_door07.
 - New approach: door model reverted to vanilla. At the end of d8020 OBJECT_setting (run by Reinit on every load):
   `if !flag(41020) { map_event_box_set_enable("EV_04_12_00", 0); }`. The Mirabelle message is kept.
+- FAILED in game (user, save000): disabling the box in OBJECT_setting didn't help (the engine re-enables it); the
+  Mirabelle message did show (so the patched script runs).
+- New approach: the box handler EV_04_12_00 itself returns early without the goal flag, before `4946@EVENT_BEGIN(1033)`:
+  GM_BEGIN; message; wait_prompt; mes_message_close; mes_close_wait; GM_END; return.
+  (Box handlers returning without an event is normal: see this map's EV_door01_box0.)

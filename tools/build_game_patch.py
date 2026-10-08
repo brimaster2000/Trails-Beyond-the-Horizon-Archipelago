@@ -157,14 +157,19 @@ GOAL_DOOR_FLAG = 41020
 
 
 def patch_final_door_ing(source: str) -> str:
-    # The last stretch starts from the EventBox "EV_04_12_00" (d8020_sys.json), not from a door object: locking the
-    # EV_door07 model did nothing in game. Switch the trigger box off at the end of OBJECT_setting (run by Reinit
-    # on every load of this floor) while the goal flag is missing.
-    setup_end = "\t174@return;\n"
-    assert source.count(setup_end) == 1, "d8020 OBJECT_setting changed; find its return"
-    source = source.replace(setup_end, f"\tif !flag({GOAL_DOOR_FLAG}) {{\n"
-                                       '\t\tmap_event_box_set_enable("EV_04_12_00", 0);\n'
-                                       "\t}\n" + setup_end)
+    # The last stretch starts from the EventBox "EV_04_12_00" (d8020_sys.json). Tested in game: locking the EV_door07
+    # model did nothing, and disabling the box in OBJECT_setting was undone by the engine. So the box's handler itself
+    # refuses to start the event: like this map's door boxes, a box handler may just do something small and return.
+    event_start = "fn EV_04_12_00() {\n\t4946@EVENT_BEGIN(1033);\n"
+    assert source.count(event_start) == 1, "d8020 EV_04_12_00 changed"
+    source = source.replace(event_start, "fn EV_04_12_00() {\n"
+                                         f"\tif !flag({GOAL_DOOR_FLAG}) {{\n"
+                                         "\t\tGM_BEGIN();\n"
+                                         '\t\tsystem[5,8](65535, "<C1>The way to the center is sealed by Archipelago.", 10, '
+                                         '"<C3>Complete your goal requirements, then come back to this floor.</C>", 16, 22);\n'
+                                         "\t\twait_prompt();\n\t\tmes_message_close();\n\t\tmes_close_wait();\n"
+                                         "\t\tGM_END();\n\t\treturn;\n\t}\n"
+                                         "\t4946@EVENT_BEGIN(1033);\n")
     talk_end = "\t333@TALK_END();\n"
     assert source.count(talk_end) == 1, "d8020 TK_MIRABEL changed"
     sealed = (f"\tif flag(32441) && !flag({GOAL_DOOR_FLAG}) {{\n"
