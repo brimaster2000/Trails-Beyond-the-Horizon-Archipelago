@@ -391,3 +391,8 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - New approach: the box handler EV_04_12_00 itself returns early without the goal flag, before `4946@EVENT_BEGIN(1033)`:
   GM_BEGIN; message; wait_prompt; mes_message_close; mes_close_wait; GM_END; return.
   (Box handlers returning without an event is normal: see this map's EV_door01_box0.)
+- FAILED again (user, save000): the message showed, then the Gram Heart fight started anyway. Cause:
+  EV_04_12_00_END is `EVENT_NEXT()`, which chains to the next story event; the engine runs _END even though the box
+  handler returned early. t_evtable has no "required flag" field (events fire in story order), so it's no lever.
+- Attempt 4: also guard EV_04_12_00_END (return without EVENT_NEXT while 41020 is missing).
+  MUST CHECK: after a refused walk-in, 32443 (event 1033 done) must stay off, or the trigger may never fire again.

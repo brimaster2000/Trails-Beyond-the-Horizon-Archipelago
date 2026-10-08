@@ -170,6 +170,13 @@ def patch_final_door_ing(source: str) -> str:
                                          "\t\twait_prompt();\n\t\tmes_message_close();\n\t\tmes_close_wait();\n"
                                          "\t\tGM_END();\n\t\treturn;\n\t}\n"
                                          "\t4946@EVENT_BEGIN(1033);\n")
+    # Tested in game: the engine still runs EV_04_12_00_END after the box, and its EVENT_NEXT() chained straight into
+    # the Gram Heart fight. Don't chain while the goal flag is missing.
+    event_end = "fn EV_04_12_00_END() {\n\t5496@EVENT_NEXT();\n"
+    assert source.count(event_end) == 1, "d8020 EV_04_12_00_END changed"
+    source = source.replace(event_end, "fn EV_04_12_00_END() {\n"
+                                       f"\tif !flag({GOAL_DOOR_FLAG}) {{\n\t\treturn;\n\t}}\n"
+                                       "\t5496@EVENT_NEXT();\n")
     talk_end = "\t333@TALK_END();\n"
     assert source.count(talk_end) == 1, "d8020 TK_MIRABEL changed"
     sealed = (f"\tif flag(32441) && !flag({GOAL_DOOR_FLAG}) {{\n"
