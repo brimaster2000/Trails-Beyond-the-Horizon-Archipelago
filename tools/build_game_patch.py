@@ -168,6 +168,14 @@ def patch_final_door_ing(source: str) -> str:
                                          '\t\tsystem[5,8](65535, "<C1>The way to the center is sealed by Archipelago.", 10, '
                                          '"<C3>Complete your goal requirements, then come back to this floor.</C>", 16, 22);\n'
                                          "\t\twait_prompt();\n\t\tmes_message_close();\n\t\tmes_close_wait();\n"
+                                         # Step the party back out of the trigger (a thin wall at z -238 across the
+                                         # corridor from door05, z -219), or it fires again at once. Floor y 2.0 and
+                                         # facing as in the game's own scene here (180 = into the compartment).
+                                         "\t\tCROSS_FADE(0.2);\n"
+                                         "\t\tchr_set_pos(65533, 0.0, 2.0, -230.0, 0.0);\n"
+                                         "\t\tchr_set_pos(65050, -1.0, 2.0, -228.5, 0.0);\n"
+                                         "\t\tchr_set_pos(65051, 1.0, 2.0, -228.5, 0.0);\n"
+                                         "\t\tchr_set_pos(65052, 0.0, 2.0, -227.0, 0.0);\n"
                                          "\t\tGM_END();\n\t\treturn;\n\t}\n"
                                          "\t4946@EVENT_BEGIN(1033);\n")
     # Tested in game: the engine still runs EV_04_12_00_END after the box, and its EVENT_NEXT() chained straight into

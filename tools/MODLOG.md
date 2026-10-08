@@ -396,3 +396,10 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   handler returned early. t_evtable has no "required flag" field (events fire in story order), so it's no lever.
 - Attempt 4: also guard EV_04_12_00_END (return without EVENT_NEXT while 41020 is missing).
   MUST CHECK: after a refused walk-in, 32443 (event 1033 done) must stay off, or the trigger may never fire again.
+- Attempt 4 result (user, save000): the fight is blocked, BUT the message re-pops endlessly (the player stays inside the
+  box) → softlock. Good news: 32443 stayed OFF after the refusal, so the trigger can still fire later.
+  The user was unstuck by setting 41020 live.
+- Attempt 5: after the message, CROSS_FADE + chr_set_pos the party back out of the box. The box is a thin wall
+  (scale 10x5x0.5) at (−0.1, 3.27, −238); the corridor runs from door05 (z −219). The game's own scene places the
+  party at y 2.0, z −237..−240, facing 180 (inward). Push-back: leader (0, 2.0, −230) facing 0; followers 65050-65052
+  just behind. No script command reads the player position, so the coordinates are fixed.
