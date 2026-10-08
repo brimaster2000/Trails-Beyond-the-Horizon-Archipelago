@@ -7,7 +7,7 @@ import colorama
 from CommonClient import CommonContext, gui_enabled, logger, server_loop, get_base_parser, ClientCommandProcessor, handle_url_arg
 
 from . import save_reader
-from .data import CHESTS, GAME_ITEMS, QUESTS
+from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
 from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, read_marker, seed_marker
 from .locations import grim_garten_chest_id, grim_garten_clear_id
@@ -19,6 +19,9 @@ CHEST_LOCATION_FLAGS = {chest.id: chest.flag for chest in CHESTS if chest.flag i
 CHEST_LOCATION_FLAGS |= {quest.id: quest.flag for quest in QUESTS}
 # AP item id -> [(game item id, quantity), ...]. Story items (Acts) give nothing in game yet.
 ITEM_CONTENTS = {ap_id: contents for ap_id, contents in GAME_ITEMS.values()}
+# Game item id -> a readable name for the client log (single-item AP items carry the game item's name).
+GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, contents) in GAME_ITEMS.items()
+                   if len(contents) == 1}
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.5
@@ -155,14 +158,20 @@ class TBTHContext(CommonContext):
                 self.game_memory.set_flag(CHAPTER_FLAG_BASE + chapter)
                 logger.info(f"Unlocked chapter {chapter} in game")
 
-        if self.game_memory.delivery_pending():
-            return  # the game hands it over on the next map change
+        # Received items go straight into the live inventory. The saved counter moves with each one, so a reloaded
+        # older save gets everything received after it again.
         pending = deliveries(self.items_received)
         count = self.game_memory.received_count()
-        if count < len(pending):
+        while count < len(pending):
             game_item_id, quantity = pending[count]
-            self.game_memory.deliver_item(game_item_id, quantity, new_received_count=count + 1)
-            logger.info(f"Sending game item {game_item_id} x{quantity} (arrives on the next map change)")
+            added = self.game_memory.add_item(game_item_id, quantity, ITEM_STACK_LIMITS.get(game_item_id, 99))
+            count += 1
+            self.game_memory.set_received_count(count)
+            name = GAME_ITEM_NAMES.get(game_item_id, f"item {game_item_id}")
+            if added < quantity:
+                logger.info(f"Received {name} x{quantity} (inventory full: only {added} fit)")
+            else:
+                logger.info(f"Received {name} x{quantity}")
 
 
 async def game_watcher(ctx: TBTHContext) -> None:

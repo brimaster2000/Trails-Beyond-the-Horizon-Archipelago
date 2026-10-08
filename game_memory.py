@@ -27,6 +27,17 @@ MAILBOX_PENDING_FLAG = 40032
 RECEIVED_COUNTER_FLAG = 50000
 # Act gating (sys_event.dat EV_NEXT_CHAPTER_END): chapter c may start only while flag CHAPTER_FLAG_BASE + c is set.
 CHAPTER_FLAG_BASE = 41000
+# Live inventory (verified 2026-10-08: writing here changes the item menu, and saves keep it):
+# [kai.exe + INVENTORY_POINTER_RVA] + INVENTORY_OFFSET = array indexed by item id, 4 bytes each: u16 count, u16 flags.
+INVENTORY_POINTER_RVA = 0xD60250
+INVENTORY_OFFSET = 0x1BB4C0
+ITEM_OWNED_NEW_FLAGS = 0x0F  # what a purchase leaves on an entry (0x07 owned + 0x08 new)
+
+
+def add_to_stack(count: int, quantity: int, limit: int) -> int:
+    return min(count + quantity, limit, 0xFFFF)
+
+
 # Grim Garten counters kept by the game patch: domain d chests opened at GG_FLAG_BASE + d*16, clears at + 8.
 GG_FLAG_BASE = 44000
 # Which seed + slot a save belongs to, as a 32-bit marker in flags 50032-50063 (0 = not linked yet).
@@ -129,6 +140,29 @@ class GameMemory:
         if address is None:
             raise RuntimeError("No game loaded")
         self.write(address + SEED_MARKER_FLAG // 8, marker.to_bytes(4, "little"))
+
+    def inventory_entry_address(self, game_item_id: int) -> int:
+        inventory = struct.unpack("<Q", self.read(self.exe_base + INVENTORY_POINTER_RVA, 8))[0]
+        if not inventory:
+            raise RuntimeError("No game loaded")
+        return inventory + INVENTORY_OFFSET + game_item_id * 4
+
+    def item_count(self, game_item_id: int) -> int:
+        return struct.unpack("<H", self.read(self.inventory_entry_address(game_item_id), 2))[0]
+
+    def add_item(self, game_item_id: int, quantity: int, limit: int) -> int:
+        """Adds straight into the live inventory; returns how many actually fit."""
+        address = self.inventory_entry_address(game_item_id)
+        count, flags = struct.unpack("<HH", self.read(address, 4))
+        new_count = add_to_stack(count, quantity, limit)
+        self.write(address, struct.pack("<HH", new_count, flags | ITEM_OWNED_NEW_FLAGS))
+        return new_count - count
+
+    def set_received_count(self, count: int) -> None:
+        address = self.flag_array_address()
+        if address is None:
+            raise RuntimeError("No game loaded")
+        self.write(address + RECEIVED_COUNTER_FLAG // 8, count.to_bytes(4, "little"))
 
     def delivery_pending(self) -> bool:
         return self.flag(MAILBOX_PENDING_FLAG)

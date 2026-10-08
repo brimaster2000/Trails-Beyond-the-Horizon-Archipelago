@@ -326,3 +326,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - (value,type) pair list at save 0x1BB4A8 (it was this array, misread);
   - a value scan for one count (needed several known counts and the id-indexed hypothesis);
   - a save-vs-state-object diff (the inventory isn't in the flag/state object).
+- VERIFIED: save slot 14 (made after the write) contains Teara Balm 22 → live inventory writes are saved.
+- Client now delivers LIVE: game_memory.add_item(id, qty, limit) adds to the count and ORs flags 0x0F; the received
+  counter (flags 50000-50031) is bumped per delivery. Verified add_item in game (Tearal Balm 4→5 shown in the menu).
+  - The "new" marker did not visibly appear with flags 0x0F (cosmetic; unknown what drives it).
+- Stack limits: data.ITEM_STACK_LIMITS from t_item stack_size. Category 0 (sepith, G-Tokens) has stack_size 1 but is
+  really currency, so it's capped at 9999. Unique gear (stack 1) stays at 1.
+- The script mailbox (APGrantItems, flags 40000-40032) is no longer used by the client. It's kept in the patch for a
+  possible future popup (show it at a safe moment: chest open / talk end — NOT OnMapLoadPost).

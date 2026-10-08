@@ -18,4 +18,5 @@ Work in progress: chests send checks and received items arrive in game. Act lock
 ## Playing
 1. Start the game and load a save.
 2. Open "Trails Beyond the Horizon Client" from the Archipelago Launcher and connect.
-3. Opened chests are sent as checks immediately. Received items are handed over one per map change.
+3. Checks are sent as soon as they happen, and received items go straight into your inventory while you play
+   (shown in the client log; there is no in-game popup yet).

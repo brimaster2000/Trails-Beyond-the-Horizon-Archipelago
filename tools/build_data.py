@@ -40,6 +40,8 @@ QUEST_FLAG_BASE = 42000
 MAIN_REQUEST_MIN = 151
 
 SEPITH_IDS = [310, 311, 312, 313, 314, 315, 316]
+CURRENCY_CATEGORY = 0  # sepith, G-Tokens: table stack_size is 1 but counts go into the thousands
+CURRENCY_CAP = 9999
 FILLER_GAME_IDS = [2, 6, 31, 30]  # Teara Balm, EP Charge II, Curia Balm, S-Tablet
 
 
@@ -174,7 +176,12 @@ def main(tbox_path: Path, folder: Path, quest_path: Path) -> None:
         "GAME_ITEMS: dict[str, tuple[int, list[tuple[int, int]]]] = {",
     ]
     lines += [f"    {n!r}: ({i}, {c!r})," for n, (i, c) in sorted(items.items(), key=lambda kv: kv[1][0])]
+    pool_ids = sorted({game_id for _, pairs in items.values() for game_id, _ in pairs})
+    rows = {row["id"]: row for row in item_rows}
+    caps = {g: CURRENCY_CAP if rows[g]["category"] == CURRENCY_CATEGORY else rows[g]["stack_size"] for g in pool_ids}
     lines += ["}", "", "# Repeatable filler (single consumables)", f"FILLER_ITEMS: list[str] = {filler!r}", ""]
+    lines += ["# Game item id -> the most the inventory can hold (t_item stack_size; currencies like sepith use 9999)",
+              f"ITEM_STACK_LIMITS: dict[int, int] = {caps!r}", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {out}: {len(chests)} chests, {len(quests)} quests, {len(items)} items ({len(bundles)} bundles)")
 
