@@ -299,3 +299,16 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   counters: domain 1 chests 2, clears 1; guard 44200 back to 0.
   - The chest on the domain-select hub (d5000-d5030) is not counted (no domain). Possible future "hub chest" check.
 - Not yet tested: a story FIRST clear (double-count guard). Needs a save before a domain's story clear.
+
+## 2026-10-08: item-received popup attempt FAILED (reverted)
+- Tried: APGrantItems moved to the end of system.OnMapLoadPost, guarded by event_get_mode()==0, with
+  OnGeneralEventBegin(0) + sound_play_se(10009) + system[5,8](65535, "<C1>Received ", 17, id, "<C3> x", 18, qty, ...)
+  + wait_prompt + mes_message_close + OnGeneralEventEnd(0, 5).
+- Result: SOFTLOCK entering the Grim Garten; the pending flag stayed set (item never given).
+  LESSON: OnMapLoadPost runs before control returns; never wait for input (wait_prompt) there.
+- Restored the Grim Garten build (silent item_add in OnMapReinit). Backup: p3a_backup_2026-10-08/script_eng_grimgarten.p3a.
+- Native message format confirmed from story scripts: `system[5,8](65535, "<C1>Received ", 17, <item>, "<C3> x5<C1>.")`.
+- Options for live / popup delivery:
+  - A. client writes the inventory in memory (live, silent; needs the inventory layout);
+  - B. a native DLL calling the script VM (live + popup; big);
+  - C. a popup in a known-safe script context (chest open / talk end).
