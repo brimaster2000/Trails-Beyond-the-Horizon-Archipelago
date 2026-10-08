@@ -433,3 +433,8 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   fullscreen game (unproven).
 - Diagnostics added: client file log via Utils.init_logging("TBTHClient") → logs/TBTHClient_<time>.txt, plus an
   event-loop watchdog that warns "Event loop was blocked for Xs" when the loop wakes > 2 s late.
+- ROOT CAUSE (client log 07:17-07:20): "Event loop was blocked for 23.3s / 20.9s / 52.2s" at the same moments that
+  worker-thread game reads took 22.8 s → the WHOLE client process stalled while the game had focus. Most likely Windows
+  11 background power throttling (EcoQoS / Efficiency mode; Microsoft Store Python).
+  Fix: opt_out_of_power_throttling() → SetProcessInformation(ProcessPowerThrottling, ControlMask EXECUTION_SPEED |
+  IGNORE_TIMER_RESOLUTION, StateMask 0) at client start; it returned 1. NOT YET VERIFIED in the playtest.

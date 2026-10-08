@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -260,6 +261,30 @@ async def game_watcher(ctx: TBTHContext) -> None:
         await asyncio.sleep(POLL_SECONDS)
 
 
+def opt_out_of_power_throttling() -> None:
+    """Windows throttles background apps (Efficiency mode / EcoQoS). In the playtest that froze this whole process for
+    20-50 s at a time while the game had focus, and the server dropped the client. Ask Windows not to throttle it."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class PowerThrottlingState(ctypes.Structure):
+        _fields_ = [("Version", wt.ULONG), ("ControlMask", wt.ULONG), ("StateMask", wt.ULONG)]
+
+    execution_speed, ignore_timer_resolution = 0x1, 0x4
+    state = PowerThrottlingState(1, execution_speed | ignore_timer_resolution, 0)  # controlled, and switched off
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wt.HANDLE
+    kernel32.SetProcessInformation.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, wt.DWORD]
+    process_power_throttling = 4  # PROCESS_INFORMATION_CLASS.ProcessPowerThrottling
+    if kernel32.SetProcessInformation(kernel32.GetCurrentProcess(), process_power_throttling,
+                                      ctypes.byref(state), ctypes.sizeof(state)):
+        logger.info("Windows background throttling disabled for this client")
+    else:
+        logger.warning(f"Could not disable Windows background throttling (error {ctypes.get_last_error()})")
+
+
 async def loop_watchdog(ctx: TBTHContext, seconds: float = 1.0) -> None:
     """Logs when the event loop wakes up late: a blocked loop can't answer the server's keepalive pings."""
     while not ctx.exit_event.is_set():
@@ -279,6 +304,7 @@ def launch(*launch_args: str):
         args = handle_url_arg(parser.parse_args(launch_args), parser=parser)
         ctx = TBTHContext(args.connect, args.password)
         ctx.auth = args.name
+        opt_out_of_power_throttling()
         if args.save_dir:
             ctx.save_dir = Path(args.save_dir)
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="TBTHServerLoop")
