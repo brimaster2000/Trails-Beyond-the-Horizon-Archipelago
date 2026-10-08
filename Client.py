@@ -10,7 +10,7 @@ from NetUtils import ClientStatus
 from . import save_reader
 from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
-from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, read_marker, seed_marker
+from .game_memory import CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, read_marker, seed_marker
 from .locations import grim_garten_chest_id, grim_garten_clear_id
 from .options import Goal, GrimGartenChestChecks, GrimGartenRepeatClears
 from .scena_regions import CHAPTER_IDS
@@ -31,14 +31,19 @@ POLL_SECONDS = 0.5
 FINAL_BOSS_DEFEATED_FLAG = 32478
 
 
-def missing_for_goal(flags: bytes, offset: int, goal: int) -> list[str] | None:
-    """None until the final boss is beaten; then what the goal still needs ([] = goal complete)."""
-    if not save_reader.flag_is_set(flags, FINAL_BOSS_DEFEATED_FLAG, offset):
-        return None
+def goal_requirements_missing(flags: bytes, offset: int, goal: int) -> list[str]:
+    """What the goal needs besides the final boss. The game itself only reaches the Finale with every route done."""
     if goal != Goal.option_all_acts_and_grim_garten:
         return []
     return [f"Grim Garten domain {domain}" for domain in range(1, 10)
             if save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16 + 8, offset) == 0]
+
+
+def missing_for_goal(flags: bytes, offset: int, goal: int) -> list[str] | None:
+    """None until the final boss is beaten; then what the goal still needs ([] = goal complete)."""
+    if not save_reader.flag_is_set(flags, FINAL_BOSS_DEFEATED_FLAG, offset):
+        return None
+    return goal_requirements_missing(flags, offset, goal)
 
 
 def grim_garten_checks(flags: bytes, offset: int) -> set[int]:
@@ -186,6 +191,10 @@ class TBTHContext(CommonContext):
         await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
                                  | grim_garten_checks(flags, 0), "game")
         await self.check_goal(flags, 0)
+        # The final boss door (after Mirabelle) opens once the goal needs nothing but the boss.
+        if not save_reader.flag_is_set(flags, GOAL_DOOR_FLAG, 0) and not goal_requirements_missing(flags, 0, self.goal):
+            self.game_memory.set_flag(GOAL_DOOR_FLAG)
+            logger.info("Goal requirements met: the way to the final boss is open")
 
         # Act items unlock their chapter at once (the gate's "Check again" sees it live).
         for item in self.items_received:

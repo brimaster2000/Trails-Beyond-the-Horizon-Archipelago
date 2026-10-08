@@ -6,6 +6,7 @@ Builds the Archipelago game patch: a script_eng.p3a with
 - t_tbox.tbl: every hand-placed chest gives one Archipelago Item instead of its vanilla contents;
 - sys_event.dat: act gating in EV_NEXT_CHAPTER_END (a chapter starts only once its AP flag is set);
 - system.dat + d5190-d5990.dat: Grim Garten chest and clear counters per domain (flags 44000+).
+- d8020.dat: the final boss door (central compartment) also needs the client's goal flag 41020.
 Dev-only: Archipelago never imports this.
 
 Usage (GAME = the game's install folder; KUROTOOLS = a KuroTools checkout with tbl2json.py/json2tbl.py/schemas;
@@ -146,6 +147,26 @@ fn APGGBossCleared(arg0: num) {{
 }}
 
 '''
+
+
+# Final boss door: d8020's EV_door07 (into the central compartment, the way to the last bosses) normally opens once
+# Mirabelle is beaten (flag 32441). It now also needs GOAL_DOOR_FLAG, which the client sets once the goal
+# requirements other than the final boss are met. Verified on saves: the 9th Grim Garten domain's finale part is
+# played between beating Mirabelle and entering the compartment, so a Grim Garten goal can always be finished.
+GOAL_DOOR_FLAG = 41020
+
+
+def patch_final_door_ing(source: str) -> str:
+    door = "\t\t140@if flag(32441) {\n"
+    assert source.count(door) == 1, "d8020 OBJECT_setting changed; find the EV_door07 release"
+    source = source.replace(door, f"\t\t140@if flag(32441) && flag({GOAL_DOOR_FLAG}) {{\n")
+    talk_end = "\t333@TALK_END();\n"
+    assert source.count(talk_end) == 1, "d8020 TK_MIRABEL changed"
+    sealed = (f"\tif flag(32441) && !flag({GOAL_DOOR_FLAG}) {{\n"
+              '\t\tsystem[5,8](65535, "<C1>The way to the center is sealed by Archipelago.", 10, '
+              '"<C3>Complete your goal requirements, then come back to this floor.</C>", 16, 22);\n'
+              "\t\twait_prompt();\n\t\tmes_message_close();\n\t}\n")
+    return source.replace(talk_end, sealed + talk_end)
 
 
 def patch_boss_ing(source: str, domain: int) -> str:
@@ -381,6 +402,12 @@ def main(game: Path, kurotools: Path, work: Path, source_archive: Path) -> None:
     (work / "sys_event_ap.ing").write_text(
         patch_sys_event_ing((work / "sys_event.ing").read_text(encoding="utf-8")), encoding="utf-8")
     run(game / "ingert.exe", "-o", sys_event_dat, work / "sys_event_ap.ing")
+
+    final_dat = extracted / "script_eng" / "scena" / "d8020.dat"
+    run(game / "ingert.exe", "-o", work / "d8020.ing", final_dat)
+    (work / "d8020_ap.ing").write_text(
+        patch_final_door_ing((work / "d8020.ing").read_text(encoding="utf-8")), encoding="utf-8")
+    run(game / "ingert.exe", "-o", final_dat, work / "d8020_ap.ing")
 
     for domain in range(1, 10):
         boss_dat = extracted / "script_eng" / "scena" / f"d5{domain}90.dat"

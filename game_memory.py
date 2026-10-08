@@ -29,6 +29,8 @@ POPUP_MORE_FLAG = 40040  # 40040-40055: how many other items arrived since the l
 RECEIVED_COUNTER_FLAG = 50000
 # Act gating (sys_event.dat EV_NEXT_CHAPTER_END): chapter c may start only while flag CHAPTER_FLAG_BASE + c is set.
 CHAPTER_FLAG_BASE = 41000
+# Final boss door (d8020 EV_door07) opens only with this flag; the client sets it once the goal needs only the boss.
+GOAL_DOOR_FLAG = 41020
 # Live inventory (verified 2026-10-08: writing here changes the item menu, and saves keep it):
 # [kai.exe + INVENTORY_POINTER_RVA] + INVENTORY_OFFSET = array indexed by item id, 4 bytes each: u16 count, u16 flags.
 INVENTORY_POINTER_RVA = 0xD60250

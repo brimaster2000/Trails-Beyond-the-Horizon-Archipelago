@@ -370,3 +370,15 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - OPEN: the game does NOT lock the final boss. With the Grim Garten goal, beating the boss before clearing all
   domains would make the goal impossible if there's no post-game. Needs an in-game "final boss door" gate
   (e.g. at the start of EV_04_14_00 in d8020) driven by a client-set flag.
+
+## 2026-10-08: final boss door (built, testing)
+- User pointed to the door that opens after beating Mirabelle. It's d8020 EV_door07, the way into the "central
+  compartment" (EV_04_12_00, flag 32443) and on to the last bosses.
+  - OBJECT_setting swaps the locked EV_door07d ("lock1") for the open EV_door07 ("reiease1") when flag 32441 (after the
+    Mirabelle battle) is set.
+- Verified on saves that the 9th Grim Garten domain's finale part (SB_09G_02 call in d8020 → keyhole → Novartis →
+  33572 cleared) is played BETWEEN Mirabelle (32441) and entering the compartment (32443):
+  save000 has 32441=1, 32443=0, GG9 in progress; save002 has both. So the Grim Garten goal can always be met first.
+- Patch: `140@if flag(32441)` → `if flag(32441) && flag(41020)`, plus a TK_MIRABEL line explaining the seal.
+- Client: sets 41020 when goal_requirements_missing() is empty (all_acts: immediately; GG goal: every domain cleared).
+  The door is set up at map load, so after meeting the requirements you re-enter the floor.
