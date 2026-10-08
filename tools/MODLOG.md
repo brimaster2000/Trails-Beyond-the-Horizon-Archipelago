@@ -453,3 +453,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Playtest "GG chests need a pause": a monitor showed the counter increments within 0.5 s of opening (domain 2: 3→4).
   The 4th chest isn't a location (grim_garten_chest_checks = 3). The earlier delays were the GUI freeze.
   Client now logs "Grim Garten domain N: chest K opened (this seed has M chest checks per domain)" past the limit.
+- Grim Garten "needs a pause" explained (user + flag diff): chests opened DURING a field battle have their TBoxProcess
+  script postponed by the game until the fight ends or the player pauses (flag 18, set on the script's first line, only
+  turns on then). Outside a fight the counter and the check happen within ~1 s (verified: 3rd Domain Chest 3, no pause).
+  Nothing is lost, only delayed. Possible future improvement: an engine-side signal instead of the script hook.
