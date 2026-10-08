@@ -89,6 +89,12 @@ SCENA_REGION: dict[str, str | None] = {
     "d0110": None,  # Floating Isles
 }
 
+# Single chests that only become reachable in a later chapter than the rest of their map (confirmed in play).
+CHEST_REGION_OVERRIDES: dict[str, str] = {
+    "Sandsea Chest 8": K2,  # Treasure07: Sandsea part only open in Kevin Route 2
+    "Sandsea Chest 9": K2,  # Treasure08
+}
+
 # Grim Garten domain number -> the chapters that open it (any one of them is enough).
 GRIM_GARTEN_DOMAINS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"]
 GRIM_GARTEN_DOMAIN_REGIONS: dict[int, list[str]] = {

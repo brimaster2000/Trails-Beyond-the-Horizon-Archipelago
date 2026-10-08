@@ -99,3 +99,13 @@ class TestActIParts(TrailsBTHTestBase):
         self.assertEqual(ITEM_NAME_TO_ID["Act I - A"], 1)
         self.assertEqual(ITEM_NAME_TO_ID["Act I - C"], 3)
         self.assertEqual(ITEM_NAME_TO_ID["Finale"], 19)
+
+
+class TestChestOverrides(TrailsBTHTestBase):
+    def test_late_sandsea_chests_need_kevin_route_2(self) -> None:
+        early = [*ACT_I_PARTS, "Act II - Kevin Route 1"]
+        self.collect_by_name(early)
+        self.assertTrue(self.can_reach_location("Sandsea Chest 7"))
+        self.assertFalse(self.can_reach_location("Sandsea Chest 8"))
+        self.assertEqual(self.multiworld.get_location("Sandsea Chest 9", self.player).parent_region.name,
+                         "Act III - Kevin Route 2")

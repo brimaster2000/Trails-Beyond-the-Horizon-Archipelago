@@ -8,7 +8,7 @@ from . import items
 from .data import CHESTS, QUESTS
 from .options import GrimGartenChestChecks, GrimGartenRepeatClears
 from .regions import grim_garten_region_name
-from .scena_regions import CHAPTER_REGION, FINALE, GRIM_GARTEN_BOUNTY_DOMAIN, GRIM_GARTEN_DOMAIN_REGIONS, SCENA_REGION
+from .scena_regions import CHAPTER_REGION, CHEST_REGION_OVERRIDES, FINALE, GRIM_GARTEN_BOUNTY_DOMAIN, GRIM_GARTEN_DOMAIN_REGIONS, SCENA_REGION
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
@@ -63,7 +63,7 @@ class trailsbthLocation(Location):
 
 def create_all_locations(world: trailsbthWorld) -> None:
     for chest in CHESTS:
-        region_name = SCENA_REGION.get(chest.scena)
+        region_name = CHEST_REGION_OVERRIDES.get(chest.name, SCENA_REGION.get(chest.scena))
         if region_name is None or chest.flag is None:  # no known opened flag means the client can't detect it
             continue
         world.get_region(region_name).add_locations({chest.name: chest.id}, trailsbthLocation)

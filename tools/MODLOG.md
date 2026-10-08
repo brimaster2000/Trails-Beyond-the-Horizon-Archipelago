@@ -457,3 +457,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   script postponed by the game until the fight ends or the player pauses (flag 18, set on the script's first line, only
   turns on then). Outside a fight the counter and the check happen within ~1 s (verified: 3rd Domain Chest 3, no pause).
   Nothing is lost, only delayed. Possible future improvement: an engine-side signal instead of the script hook.
+- Logic fix from the playtest: Sandsea Chests 8 and 9 (m3200 Treasure07/08) are only reachable in Kevin Route 2.
+  New scena_regions.CHEST_REGION_OVERRIDES (location name → region) puts them in "Act III - Kevin Route 2".
+  The running playtest seed still has the old placement (seeds are fixed at generation).
+- Open question: do hack boxes need a hacking level (TBoxProcess checks security levels 1-3)? Needs in-game confirmation.
