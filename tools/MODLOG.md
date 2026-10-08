@@ -475,3 +475,15 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   before APShowReceived(). The conversation site is unchanged. Messages: "Found <item> x<n>!",
   "Found an item for another player!", "Found an act unlock!", plus the old "Received ... from Archipelago."
 - 91 tests pass.
+
+## 2026-10-08: playtest PAUSED (resume here)
+- Seed + server state + spoiler + launcher saved in `Archipelago/playtest_2026-10-08/`.
+  Double-click `resume_playtest.bat` to start the local server (127.0.0.1:38281) and the text client (slot "Van").
+- Run state: New Game save linked to the seed. Acts received: I-A/B/C, Kevin 1, Van 1, Van 3 (via !getitem because the
+  old logic put it in Sandsea Chest 9). The player is around Act II / the Grim Garten 3rd domain.
+- Installed patch: chest popups showing each chest's own contents (build16). NOT YET TESTED in game.
+  Previous patch: p3a_backup_2026-10-08/script_eng_finaldoor.p3a.
+- Next when resuming:
+  - test the chest popups (does each popup match its chest? is the up-to-1 s pause OK?);
+  - keep playing; reword the "Goal requirements met" message; offer the no-GUI client in the Launcher;
+  - test the GUI client with the game in borderless windowed mode.
