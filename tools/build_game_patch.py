@@ -75,7 +75,7 @@ def patch_system_ing(source: str) -> str:
 # Must match scena_regions.CHAPTER_IDS and game_memory.CHAPTER_FLAG_BASE.
 CHAPTER_FLAG_BASE = 41000
 GATED_CHAPTERS = {
-    1: "Act I", 4: "Act II - Rean Route 1", 5: "Act II - Kevin Route 1", 6: "Act II - Van Route 1",
+    1: "Act I - A", 2: "Act I - B", 3: "Act I - C", 4: "Act II - Rean Route 1", 5: "Act II - Kevin Route 1", 6: "Act II - Van Route 1",
     10: "Act II - Rean Route 2", 11: "Act II - Van Route 2", 12: "Act II - Van Route 3",
     13: "Act III - Kevin Route 2", 14: "Act III - Van Route 4", 15: "Act III - Van Route 5",
     16: "Act III - Rean Route 3", 17: "Act III - Kevin Route 3", 18: "Act III - Van Route 6", 19: "Finale",
@@ -148,8 +148,10 @@ def patch_sys_event_ing(source: str) -> str:
     if "fn APSelectChapter(" in source:
         raise SystemExit("sys_event.dat already has the Archipelago gate; pass an unpatched script_eng.p3a as SOURCE")
     edits = [
-        # Prologue -> Act I
+        # Prologue -> Act I Part 1 (A), Part 1 -> 2 (B), Part 2 -> 3 (C)
         ("\t\t60@var0 = 1;\n", "\t\t60@var0 = 1;\n\t\tAPWaitChapter(var0);\n", 1),
+        ("\t\t65@var0 = 2;\n", "\t\t65@var0 = 2;\n\t\tAPWaitChapter(var0);\n", 1),
+        ("\t\t70@var0 = 3;\n", "\t\t70@var0 = 3;\n\t\tAPWaitChapter(var0);\n", 1),
         # Finale
         ("\t\t\t277@var0 = 19;\n", "\t\t\t277@var0 = 19;\n\t\t\tAPWaitChapter(var0);\n", 1),
     ]

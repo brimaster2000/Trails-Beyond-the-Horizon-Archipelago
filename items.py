@@ -5,17 +5,18 @@ from typing import TYPE_CHECKING
 from BaseClasses import Item, ItemClassification
 
 from .data import FILLER_ITEMS, GAME_ITEMS
-from .scena_regions import STORY_REGIONS
+from .scena_regions import CHAPTER_IDS, STORY_REGIONS
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
 
-# Story items: one per chapter after the Prologue ("Act I", "Act II - Rean Route 1", ..., "Finale"). IDs 1..14.
+# Story items: one per chapter after the Prologue ("Act I - A", ..., "Act II - Rean Route 1", ..., "Finale").
+# Their ids are the game's chapter ids (1..19), so adding story items never shifts existing ids.
 STORY_ITEMS = STORY_REGIONS[1:]
 
 # Game items keep IDs derived from the game's own item IDs (see tools/build_data.py), so the client can
 # turn an AP item ID straight back into the game items to give.
-ITEM_NAME_TO_ID = {name: i for i, name in enumerate(STORY_ITEMS, start=1)}
+ITEM_NAME_TO_ID = {name: CHAPTER_IDS[name] for name in STORY_ITEMS}
 ITEM_NAME_TO_ID |= {name: ap_id for name, (ap_id, _) in GAME_ITEMS.items()}
 
 FILLER_KEYWORDS = ("Balm", "Tablet", "EP Charge", "Sepith", "G-Tokens", "U-Material")

@@ -4,7 +4,8 @@
 # Hand-edited: unlike data.py, this file is not generated.
 
 PROLOGUE = "Prologue"
-ACT_I = "Act I"
+ACT_I_PARTS = ["Act I - A", "Act I - B", "Act I - C"]  # the game's Act I Part 1 / 2 / 3
+ACT_I_A, ACT_I_B, ACT_I_C = ACT_I_PARTS
 ACT_II_ROUTES = [
     "Act II - Rean Route 1",
     "Act II - Kevin Route 1",
@@ -22,30 +23,31 @@ ACT_III_ROUTES = [
     "Act III - Van Route 6",
 ]
 FINALE = "Finale"
-STORY_REGIONS = [PROLOGUE, ACT_I, *ACT_II_ROUTES, *ACT_III_ROUTES, FINALE]
+STORY_REGIONS = [PROLOGUE, *ACT_I_PARTS, *ACT_II_ROUTES, *ACT_III_ROUTES, FINALE]
 
 R1, K1, V1, R2, V2, V3 = ACT_II_ROUTES
 K2, V4, V5, R3, K3, V6 = ACT_III_ROUTES
 
 # The game's own route order (sys_event.dat EV_NEXT_CHAPTER_END): the Time Chart only offers the routes of the
 # current wave, and the next wave opens once every route of this one is finished.
-WAVES = [[ACT_I], [R1, K1, V1], [R2, V2], [V3], [K2, V4], [V5], [R3, K3, V6], [FINALE]]
+WAVES = [[ACT_I_A], [ACT_I_B], [ACT_I_C], [R1, K1, V1], [R2, V2], [V3], [K2, V4], [V5], [R3, K3, V6], [FINALE]]
 
 # Chapter ids (global_work(12) / t_chapter) of each story item; the game patch gates chapter c on flag 41000 + c.
+# They double as the story items' AP item ids.
 CHAPTER_IDS = {
-    ACT_I: 1, R1: 4, K1: 5, V1: 6, R2: 10, V2: 11, V3: 12,
+    ACT_I_A: 1, ACT_I_B: 2, ACT_I_C: 3, R1: 4, K1: 5, V1: 6, R2: 10, V2: 11, V3: 12,
     K2: 13, V4: 14, V5: 15, R3: 16, K3: 17, V6: 18, FINALE: 19,
 }
 
 # Source: the area list per act from the Neoseeker walkthrough (supplied by Brimaster2000), plus NoobFeed for Act I parts.
 SCENA_REGION: dict[str, str | None] = {
     "d6010": PROLOGUE,  # VAR-halla Sector
-    "m2000": ACT_I,  # Seiden Waterworks (Part 1)
-    "d6500": ACT_I,  # Western Outskirts (Part 1)
-    "c2400": ACT_I,  # Edith - Lèvre District (Part 1)
-    "d6600": ACT_I,  # Underground Culvert (Part 2)
-    "c1200": ACT_I,  # Blacklight District (Part 2)
-    "d6700": ACT_I,  # Junction Area (Part 3)
+    "m2000": ACT_I_A,  # Seiden Waterworks (Part 1)
+    "d6500": ACT_I_A,  # Western Outskirts (Part 1)
+    "c2400": ACT_I_A,  # Edith - Lèvre District (Part 1)
+    "d6600": ACT_I_B,  # Underground Culvert (Part 2)
+    "c1200": ACT_I_B,  # Blacklight District (Part 2)
+    "d6700": ACT_I_C,  # Junction Area (Part 3)
     "m4100": R1,  # Auge Canyon (revisited in Rean 2)
     "d7010": V1,  # Cursed Labyrinth
     "m3200": K1,  # Sandsea (revisited in Kevin 2)
@@ -82,8 +84,8 @@ SCENA_REGION: dict[str, str | None] = {
 # Grim Garten domain number -> the chapters that open it (any one of them is enough).
 GRIM_GARTEN_DOMAINS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"]
 GRIM_GARTEN_DOMAIN_REGIONS: dict[int, list[str]] = {
-    1: [ACT_I],
-    2: [ACT_I],  # Frosted Gorge
+    1: [ACT_I_C],
+    2: [ACT_I_C],  # Frosted Gorge
     3: [R1, V1, K1],
     4: [R2, V2],
     5: [V3],

@@ -6,8 +6,8 @@ from Options import Choice, OptionGroup, PerGameCommonOptions, Range, Toggle
 class ActOrder(Choice):
     """
     Ordered: follows the game's Time Chart. Each route needs its own item, and routes open in waves:
-    Act I -> Rean 1 / Kevin 1 / Van 1 -> Rean 2 / Van 2 -> Van 3 -> Kevin 2 / Van 4 -> Van 5
-    -> Rean 3 / Kevin 3 / Van 6 -> Finale. Within a wave the routes can be played in any order.
+    Act I - A -> Act I - B -> Act I - C -> Rean 1 / Kevin 1 / Van 1 -> Rean 2 / Van 2 -> Van 3
+    -> Kevin 2 / Van 4 -> Van 5 -> Rean 3 / Kevin 3 / Van 6 -> Finale. Within a wave the routes can be played in any order.
     Actsanity (experimental, not supported yet): any route at any time. This needs skipping chapters in game,
     so generation refuses it for now.
     """

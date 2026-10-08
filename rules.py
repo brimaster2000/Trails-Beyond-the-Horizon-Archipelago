@@ -6,7 +6,7 @@ from BaseClasses import CollectionState
 from worlds.generic.Rules import set_rule
 
 from .regions import grim_garten_region_name
-from .scena_regions import ACT_I, ACT_II_ROUTES, ACT_III_ROUTES, GRIM_GARTEN_DOMAIN_REGIONS, WAVES
+from .scena_regions import ACT_I_PARTS, ACT_II_ROUTES, ACT_III_ROUTES, GRIM_GARTEN_DOMAIN_REGIONS, WAVES
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
@@ -28,7 +28,7 @@ def set_all_rules(world: trailsbthWorld) -> None:
         required = [name, *needed]
         set_rule(world.get_entrance(f"To {name}"), lambda state, r=required: state.has_all(r, player))
 
-    all_acts = [ACT_I, *ACT_II_ROUTES, *ACT_III_ROUTES]
+    all_acts = [*ACT_I_PARTS, *ACT_II_ROUTES, *ACT_III_ROUTES]
     grim_garten_regions = [grim_garten_region_name(d) for d in GRIM_GARTEN_DOMAIN_REGIONS]
     need_grim_garten = world.options.goal == world.options.goal.option_all_acts_and_grim_garten
 
