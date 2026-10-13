@@ -28,8 +28,16 @@ class FakeGame:
     def popup_pending(self) -> bool:
         return False
 
-    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = 0) -> None:
-        self.popups.append((game_item_id, quantity, more) if kind == 0 else (kind, game_item_id, quantity, more))
+    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = 0, replace: bool = False) -> None:
+        entry = (game_item_id, quantity, more) if kind == 0 else (kind, game_item_id, quantity, more)
+        if replace and self.popups:
+            self.popups[-1] = entry
+        else:
+            self.popups.append(entry)
+
+    def read_popup(self) -> tuple[int, int, int, int]:
+        last = self.popups[-1]
+        return (0, *last) if len(last) == 3 else last
 
     def received_count(self) -> int:
         return self.received
@@ -179,3 +187,38 @@ class TestChestPopups(unittest.TestCase):
     def test_act_item(self) -> None:
         game, _ = self.run_found(SimpleNamespace(item=4, player=1))
         self.assertEqual(game.popups, [(3, 0, 0, 0)])
+
+
+class TestChestPopupPreemptsStaleReceived(unittest.TestCase):
+    def test_found_replaces_waiting_received_popup(self) -> None:
+        from ..Client import TBTHContext, CHEST_LOCATION_FLAGS
+        from ..data import GAME_ITEMS
+
+        balm, _ = GAME_ITEMS["Teara Balm"]
+        location = next(iter(CHEST_LOCATION_FLAGS))
+        game = FakeGame()
+        game.popups = [(31, 1, 0)]  # an older "Received Curia Balm" popup still waiting
+        game.popup_pending = lambda: True
+        flags = bytearray(game.read_flags())
+        flag = CHEST_LOCATION_FLAGS[location]
+        flags[flag // 8] |= 1 << (flag % 8)
+        game.read_flags = lambda: bytes(flags)
+
+        async def run() -> TBTHContext:
+            ctx = TBTHContext(None, None)
+            ctx.slot = 1
+            ctx.game_memory = game
+            ctx.items_received = []
+            ctx.missing_locations = {location}
+            ctx.scouted = {location: SimpleNamespace(item=balm, player=1)}
+
+            async def capture(msgs):
+                pass
+
+            ctx.send_msgs = capture
+            await ctx.sync_with_game()
+            return ctx
+
+        ctx = asyncio.run(run())
+        self.assertEqual(game.popups, [(1, 2, 1, 0)])  # the chest shows what it held
+        self.assertEqual(ctx.popup_backlog, [(31, 1)])  # the older one waits for the next moment

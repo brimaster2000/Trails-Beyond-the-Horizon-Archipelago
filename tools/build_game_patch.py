@@ -86,12 +86,24 @@ fn APShowReceived() {
 	return;
 }
 
-// At a chest, give the client up to 1 s to post what this chest held, so the popup belongs to this chest.
-fn APWaitForChestPopup() {
+// At a chest, give the client up to 1 s to post what this chest held ("found" kinds 1-3), then show only that:
+// a "Received" popup (kind 0) already waiting would otherwise look like this chest's contents (playtest feedback),
+// so those are left for the next conversation.
+fn APChestPopupReady() {
+	if flag(40032) && (flag(40034) || flag(40035)) {
+		return 1;
+	}
+	return 0;
+}
+
+fn APShowChestPopup() {
 	var w = 0;
-	while !flag(40032) && w < 10 {
+	while !APChestPopupReady() && w < 10 {
 		wait(0.1);
 		w = w + 1;
+	}
+	if APChestPopupReady() {
+		APShowReceived();
 	}
 	return;
 }
@@ -247,7 +259,7 @@ def patch_system_ing(source: str) -> str:
     chest_fade_in = [line for line in source.split("\n") if line.endswith("4363@fade_in(0.5, 0, 0.0);")]
     assert len(chest_fade_in) == 1, "TBoxProcess changed; find its fade_in after the SP message"
     source = source.replace(chest_fade_in[0] + "\n",
-                            "\t\tAPWaitForChestPopup();\n\t\tAPShowReceived();\n" + chest_fade_in[0] + "\n")
+                            "\t\tAPShowChestPopup();\n" + chest_fade_in[0] + "\n")
     talk_ends = [line for line in source.split("\n") if line.endswith("@OnTalkEndCommon();")]
     assert len(talk_ends) == 2, "OnTalkEnd/OnTalkEndCam changed"
     for line in talk_ends:

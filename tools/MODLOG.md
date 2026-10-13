@@ -487,3 +487,16 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - test the chest popups (does each popup match its chest? is the up-to-1 s pause OK?);
   - keep playing; reword the "Goal requirements met" message; offer the no-GUI client in the Launcher;
   - test the GUI client with the game in borderless windowed mode.
+
+## 2026-10-12: chest popups, round 2
+- Playtest: the chest still showed an older item. Cause: a "Received" popup (from !getitem / earlier deliveries)
+  was already waiting, so the chest's wait (`while !flag(40032)`) ended at once and showed it. The client can't win
+  that race: the script reaches the popup before the client's 0.25 s poll has even seen the chest.
+- Fix:
+  - the chest site (APShowChestPopup) waits up to 1 s for a FOUND popup (kind bits 40034/40035 set) and shows only
+    that; "Received" popups (kind 0) are only shown at conversation ends;
+  - the client also lets a found popup replace a waiting received popup (game_memory.read_popup,
+    queue_popup(replace=True)), re-queueing the older one.
+- User wish: a LIVE popup the moment an item arrives. Script message boxes can't do that (scripts only run at game
+  events). Idea: find a non-blocking notification/toast the engine draws itself (e.g. a field pickup banner) and its
+  queue in memory.

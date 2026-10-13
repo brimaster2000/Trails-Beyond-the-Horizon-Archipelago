@@ -294,7 +294,14 @@ class TBTHContext(CommonContext):
                 logger.info(f"Received {name} x{quantity}")
 
         # In-game popups, one at a time: what a just-opened chest held comes first (the chest waits up to 1 s for
-        # it), then one summary of items that arrived from other worlds.
+        # it), then one summary of items that arrived from other worlds. A chest's own popup takes the place of a
+        # "Received" popup still waiting, or that older one would show at this chest (seen in the playtest).
+        if self.found_popups and await self.game_io(self.game_memory.popup_pending):
+            kind, game_item_id, quantity, more = await self.game_io(self.game_memory.read_popup)
+            if kind == POPUP_RECEIVED:
+                self.popup_backlog.insert(0, (game_item_id, quantity))
+                kind, game_item_id, quantity, more = self.found_popups.pop(0)
+                await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, more, kind, True)
         if (self.found_popups or self.popup_backlog) and not await self.game_io(self.game_memory.popup_pending):
             if self.found_popups:
                 kind, game_item_id, quantity, more = self.found_popups.pop(0)

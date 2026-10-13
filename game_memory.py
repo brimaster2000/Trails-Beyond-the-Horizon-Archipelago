@@ -179,10 +179,26 @@ class GameMemory:
             raise RuntimeError("No game loaded")
         return int.from_bytes(self.read(address + RECEIVED_COUNTER_FLAG // 8, 4), "little")
 
-    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = POPUP_RECEIVED) -> None:
-        """Ask system.APShowReceived to show a popup at the next safe moment (a chest waits up to 1 s for it)."""
+    def read_popup(self) -> tuple[int, int, int, int]:
+        """The queued popup as (kind, game item id, quantity, more)."""
+        address = self.flag_array_address()
+        if address is None:
+            raise RuntimeError("No game loaded")
+        flags = self.read(address, FLAG_ARRAY_BYTES)
+        word = int.from_bytes(flags[POPUP_ITEM_FLAG // 8:POPUP_ITEM_FLAG // 8 + 4], "little")
+        more = int.from_bytes(flags[POPUP_MORE_FLAG // 8:POPUP_MORE_FLAG // 8 + 2], "little")
+        kind = sum(1 << i for i in range(2) if flags[(POPUP_KIND_FLAG + i) // 8] >> ((POPUP_KIND_FLAG + i) % 8) & 1)
+        return kind, word & 0xFFFF, word >> 16, more
+
+    def queue_popup(self, game_item_id: int, quantity: int, more: int, kind: int = POPUP_RECEIVED,
+                    replace: bool = False) -> None:
+        """Ask system.APShowReceived to show a popup at the next safe moment (a chest waits up to 1 s for it).
+        With replace, a popup still waiting is overwritten (the pending flag is cleared first, so the game never
+        reads a half-written mailbox)."""
         if self.popup_pending():
-            raise RuntimeError("Previous popup not shown yet")
+            if not replace:
+                raise RuntimeError("Previous popup not shown yet")
+            self.set_flag(POPUP_PENDING_FLAG, False)
         address = self.flag_array_address()
         if address is None:
             raise RuntimeError("No game loaded")
