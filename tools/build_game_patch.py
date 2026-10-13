@@ -31,6 +31,9 @@ ARCHIPELAGO_ITEM_ID = 4922  # first free id after the game's last item (4921)
 ARCHIPELAGO_ITEM_TEMPLATE_ID = 107  # Workshop Points: stackable counter item (category 30)
 FIXED_CHEST_COUNT = 187
 QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build_data.py)
+# Item popups at chests and conversation ends. Off for now (playtest 2026-10-13: the chest popup kept showing an
+# older item); the popup functions stay in system.dat but nothing calls them. Must match IN_GAME_POPUPS in Client.py.
+ENABLE_POPUPS = False
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
@@ -258,12 +261,13 @@ def patch_system_ing(source: str) -> str:
     # conversation (still inside the talk event, before event_end).
     chest_fade_in = [line for line in source.split("\n") if line.endswith("4363@fade_in(0.5, 0, 0.0);")]
     assert len(chest_fade_in) == 1, "TBoxProcess changed; find its fade_in after the SP message"
-    source = source.replace(chest_fade_in[0] + "\n",
-                            "\t\tAPShowChestPopup();\n" + chest_fade_in[0] + "\n")
     talk_ends = [line for line in source.split("\n") if line.endswith("@OnTalkEndCommon();")]
     assert len(talk_ends) == 2, "OnTalkEnd/OnTalkEndCam changed"
-    for line in talk_ends:
-        source = source.replace(line + "\n", line + "\n\tAPShowReceived();\n")
+    if ENABLE_POPUPS:
+        source = source.replace(chest_fade_in[0] + "\n",
+                                "\t\tAPShowChestPopup();\n" + chest_fade_in[0] + "\n")
+        for line in talk_ends:
+            source = source.replace(line + "\n", line + "\n\tAPShowReceived();\n")
     tbox_lines = [line for line in source.split("\n") if line.endswith("@map_obj_tbox_get();")]
     assert len(tbox_lines) == 1, "TBoxProcess changed; find map_obj_tbox_get"
     source = source.replace(tbox_lines[0] + "\n", tbox_lines[0] + "\n\t\tAPGGChestOpened();\n")

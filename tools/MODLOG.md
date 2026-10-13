@@ -502,3 +502,19 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   queue in memory.
 - Decision (user): no live popup needed; live inventory delivery is enough. Forcing an engine event from the client is
   out of scope (risky: the event system softlocked easily during the final-door work).
+
+## 2026-10-13: in-game item popups switched OFF (for now)
+- Playtest: after round 2 the chest popup STILL showed an older item. Likely cause: whenever the client misses a chest's
+  1 s wait, that chest's "found" popup stays pending and shows at the NEXT chest, so every later popup stays one behind.
+- Decision (user): play without popups; items go straight into the inventory and the text client lists everything.
+- Switches (must match): `ENABLE_POPUPS = False` in tools/build_game_patch.py (drops the APShowChestPopup call at the
+  chest and the two APShowReceived calls at conversation ends; the functions stay in system.dat, unused) and
+  `IN_GAME_POPUPS = False` in Client.py (queues nothing, and clears a pending flag 40032 left in older saves).
+  Chests no longer pause for up to 1 s.
+- Installed build18 (`$TEMP/tbth_build18`); build17 backed up as p3a_backup_2026-10-08/script_eng_chestpopup2.p3a.
+- 93 tests pass (the popup tests switch popups back on with mock.patch).
+- ROADMAP, later: "forced event" popups. The client makes the engine start a small popup event itself, instead of
+  waiting for a chest or conversation. Expect softlocks; build safety nets as they show up, e.g.:
+  - never fire during a battle, cutscene, menu or map load: hold the popups and show them all once it's safe;
+  - batch several items into one popup;
+  - a fallback when the event doesn't finish (the client stops forcing popups for the session).

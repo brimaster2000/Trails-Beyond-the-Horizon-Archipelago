@@ -13,7 +13,8 @@ from . import save_reader
 from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
 from .game_memory import (
-    CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_RECEIVED,
+    CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_PENDING_FLAG,
+    POPUP_RECEIVED,
     read_marker, seed_marker,
 )
 from .locations import grim_garten_chest_id, grim_garten_clear_id
@@ -31,6 +32,9 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.25  # a chest waits up to 1 s for its popup
+# Off for now (playtest 2026-10-13: the chest popup kept showing an older item). Must match ENABLE_POPUPS in
+# tools/build_game_patch.py. Items still go straight into the inventory and the client log lists them.
+IN_GAME_POPUPS = False
 SLOW_CALL_SECONDS = 2.0
 LOOP_LAG_WARNING_SECONDS = 2.0
 STACK_DUMP_SECONDS = 3.0
@@ -293,6 +297,12 @@ class TBTHContext(CommonContext):
             else:
                 logger.info(f"Received {name} x{quantity}")
 
+        if not IN_GAME_POPUPS:
+            self.found_popups.clear()
+            self.popup_backlog.clear()
+            if save_reader.flag_is_set(flags, POPUP_PENDING_FLAG, 0):  # left waiting in a save from an older build
+                await self.game_io(self.game_memory.set_flag, POPUP_PENDING_FLAG, False)
+            return
         # In-game popups, one at a time: what a just-opened chest held comes first (the chest waits up to 1 s for
         # it), then one summary of items that arrived from other worlds. A chest's own popup takes the place of a
         # "Received" popup still waiting, or that older one would show at this chest (seen in the playtest).

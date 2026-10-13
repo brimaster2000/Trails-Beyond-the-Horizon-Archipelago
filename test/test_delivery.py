@@ -1,9 +1,13 @@
 import asyncio
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from ..data import GAME_ITEMS
-from ..game_memory import add_to_stack
+from ..game_memory import POPUP_PENDING_FLAG, add_to_stack
+
+# In-game popups are switched off for now (Client.IN_GAME_POPUPS); the popup tests switch them back on.
+popups_on = mock.patch(f"{__package__.rpartition('.')[0]}.Client.IN_GAME_POPUPS", True)
 
 
 class FakeGame:
@@ -13,17 +17,22 @@ class FakeGame:
         self.inventory: dict[int, int] = {}
         self.received = received
         self.popups: list[tuple[int, int, int]] = []
+        self.flags_cleared: list[int] = []
+        self.stale_popup = False
 
     def read_flags(self) -> bytes:
         flags = bytearray(0x2000)
         flags[32000 // 8] |= 1 << (32000 % 8)  # a real save: the Prologue has started
+        if self.stale_popup:
+            flags[POPUP_PENDING_FLAG // 8] |= 1 << (POPUP_PENDING_FLAG % 8)
         return bytes(flags)
 
     def write_marker(self, marker: int) -> None:
         pass
 
     def set_flag(self, flag: int, value: bool = True) -> None:
-        pass
+        if not value:
+            self.flags_cleared.append(flag)
 
     def popup_pending(self) -> bool:
         return False
@@ -71,6 +80,7 @@ class TestLiveDelivery(unittest.TestCase):
 
         asyncio.run(sync())
 
+    @popups_on
     def test_delivers_everything_and_counts(self) -> None:
         balm, _ = GAME_ITEMS["Teara Balm"]
         sepith, contents = GAME_ITEMS["All-Element Sepith x100"]
@@ -80,6 +90,15 @@ class TestLiveDelivery(unittest.TestCase):
         self.assertEqual({g: game.inventory[g] for g, _ in contents}, {g: 100 for g, _ in contents})
         self.assertEqual(game.received, 2 + len(contents))  # one per (item, quantity) delivery
         self.assertEqual(game.popups, [(2, 1, 1 + len(contents))])  # one popup: the first item, +N more
+
+    def test_no_popups_while_switched_off(self) -> None:
+        balm, _ = GAME_ITEMS["Teara Balm"]
+        game = FakeGame()
+        game.stale_popup = True  # a popup left waiting in a save from an older build
+        self.run_sync(game, [balm])
+        self.assertEqual(game.inventory[2], 1)  # the item still arrives
+        self.assertEqual(game.popups, [])
+        self.assertEqual(game.flags_cleared, [POPUP_PENDING_FLAG])
 
     def test_older_save_gets_the_rest_again(self) -> None:
         balm, _ = GAME_ITEMS["Teara Balm"]
@@ -140,6 +159,7 @@ class TestEventLoopStaysFree(unittest.TestCase):
         self.assertLess(ticks[-1] - ticks[0], 0.4)  # kept ticking while the read was still sleeping
 
 
+@popups_on
 class TestChestPopups(unittest.TestCase):
     def run_found(self, scouted: dict, slot: int = 1) -> tuple[FakeGame, list]:
         from ..Client import TBTHContext, CHEST_LOCATION_FLAGS
@@ -189,6 +209,7 @@ class TestChestPopups(unittest.TestCase):
         self.assertEqual(game.popups, [(3, 0, 0, 0)])
 
 
+@popups_on
 class TestChestPopupPreemptsStaleReceived(unittest.TestCase):
     def test_found_replaces_waiting_received_popup(self) -> None:
         from ..Client import TBTHContext, CHEST_LOCATION_FLAGS
