@@ -500,3 +500,5 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - User wish: a LIVE popup the moment an item arrives. Script message boxes can't do that (scripts only run at game
   events). Idea: find a non-blocking notification/toast the engine draws itself (e.g. a field pickup banner) and its
   queue in memory.
+- Decision (user): no live popup needed; live inventory delivery is enough. Forcing an engine event from the client is
+  out of scope (risky: the event system softlocked easily during the final-door work).
