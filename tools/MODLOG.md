@@ -578,3 +578,5 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Item popups disabled (unreliable); live delivery + client log worked for the whole run.
 - Next: missable checks / Act Menu (see the design entry above). Before the next seed: audit the other maps' chests
   against Neoseeker for later-route-only chests.
+- Chest audit against Neoseeker: done by the user during the run. Only Sandsea 8/9 and Blacklight District needed
+  fixes (both done).
