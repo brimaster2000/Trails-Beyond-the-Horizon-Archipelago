@@ -55,7 +55,7 @@ SCENA_REGION: dict[str, str | None] = {
     "d6500": ACT_I_A,  # Western Outskirts (Part 1)
     "c2400": ACT_I_A,  # Edith - Lèvre District (Part 1)
     "d6600": ACT_I_B,  # Underground Culvert (Part 2)
-    "c1200": ACT_I_B,  # Blacklight District (Part 2)
+    "c1200": V2,  # Blacklight District: its chests are only reachable during the fire in Van Route 2 (playtest)
     "d6700": ACT_I_C,  # Junction Area (Part 3)
     "m4100": R1,  # Auge Canyon (revisited in Rean 2)
     "d7010": V1,  # Cursed Labyrinth

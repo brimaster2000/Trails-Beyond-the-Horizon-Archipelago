@@ -28,6 +28,11 @@ class TestSideQuests(TrailsBTHTestBase):
             location = self.multiworld.get_location(f"4SPG - {domain} Domain Bounty", self.player)
             self.assertEqual(location.parent_region.name, region)
 
+    def test_blacklight_district_chests_need_van_route_2(self) -> None:
+        # Playtest: every Blacklight District chest is only reachable during the fire in Van Route 2.
+        for name in ["Blacklight District Chest 1", "Blacklight District Hack Box"]:
+            self.assertEqual(self.multiworld.get_location(name, self.player).parent_region.name, "Act II - Van Route 2")
+
     def test_third_domain_needs_all_of_wave_one(self) -> None:
         self.collect_by_name([*ACT_I_PARTS, "Act II - Kevin Route 1", "Act II - Van Route 1"])
         self.assertFalse(self.can_reach_region("Grim Garten - 3rd Domain"))
