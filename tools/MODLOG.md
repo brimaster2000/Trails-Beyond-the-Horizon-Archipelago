@@ -545,3 +545,27 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - User: every check in the game is permanently missable except Grim Garten (chests, 4SPGs, hack boxes all lock once
   their act/route ends). The user has a design for handling this, and it will be the backbone of true Actsanity.
   Get their design before starting.
+
+## 2026-10-14: missable checks / true Actsanity, design (user) + first research
+- User's design: an "Act Menu" (same style as the route-gate menu) listing Prologue, Act I-A, I-B, I-C,
+  Act II-A (Time Chart: Rean 1 / Kevin 1 / Van 1), Intermission, Act II-B (Rean 2 / Van 2), Act II-C (Van 3),
+  Act III-A (Van 4 / Kevin 2), Act III-B (Van 5), Act III-C (Rean 3 / Kevin 3 / Van 6), Finale.
+  - Full Actsanity: any act you hold can be entered from the menu.
+  - Current wave mode: acts not reached yet are greyed out/locked; finished acts can be re-entered (fixes missables).
+  - Wished entry point: the pause screen, on the unused right stick, with an "R-stick: Act Menu" hint at bottom left
+    next to System.
+- FOUND: script_eng/scena/debug.dat is Falcom's developer debug script, shipped in retail:
+  - FC_EventJump(arg0, arg1, event): FC_Reset_ScenarioFlags (wipes story flags 32000-33xxx) ->
+    FC_Reset_ScenarioFlags2 -> FC_Event_FlagSet (sets every story flag up to that event, sets global_work(12)
+    = chapter) -> FC_Event_PartySet (party_clear/party_join for that point) -> EVENT_NEXT(event).
+    This is the chapter-replay machinery. FC_EventJumpReload has no script callers (the engine calls it).
+  - FC_All_FlagSet_<chapter>() per chapter/route, plus FC_All_FlagSet_FDungeon4-9 (Grim Garten).
+  - debug_menu_create/additem/open/wait: a working script menu API (FC_MainMenu: Party Select, Map Jump, ...).
+  - Chest flags (1500+) and our AP flags are outside the reset ranges, so opened chests stay opened.
+- Open questions:
+  - pause-menu button and icon: the camp menu is native UI (exe), so a new entry/button needs exe work. Fallbacks:
+    the client reads the controller/keyboard itself and forces an event (the same need as forced-event popups),
+    or a script entry point we already own (lock menu, save point, an NPC or object, the Grim Garten hub);
+  - going back to the frontier after replaying an old act (jump to the frontier act's start, or a flag snapshot);
+  - quest-table state (4SPG progress) is separate from the flags: check that it survives a jump;
+  - what state the event jump does NOT restore (party levels/equipment are kept, which is what we want).
