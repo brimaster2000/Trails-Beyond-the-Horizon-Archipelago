@@ -19,9 +19,20 @@ class TestSideQuests(TrailsBTHTestBase):
         self.collect_by_name([*ACT_I_PARTS, "Act II - Rean Route 1"])
         self.assertTrue(self.can_reach_location("4SPG - Auge Canyon Bounty"))
 
-    def test_grim_garten_bounty_is_in_its_domain(self) -> None:
-        location = self.multiworld.get_location("4SPG - Third Domain Bounty", self.player)
-        self.assertEqual(location.parent_region.name, "Grim Garten - 3rd Domain")
+    def test_grim_garten_bounties_are_in_the_route_that_offers_them(self) -> None:
+        # Neoseeker 4SPG list. A playtest seed put Rean Route 1 on the Third Domain Bounty while logic thought any
+        # wave 1 route reached it; the game only offers it in Van Route 3, which itself needs Rean Route 1.
+        expected = {"First": "Act II - Rean Route 2", "Third": "Act II - Van Route 3",
+                    "Fifth": "Act III - Van Route 5", "Seventh": "Act III - Van Route 6"}
+        for domain, region in expected.items():
+            location = self.multiworld.get_location(f"4SPG - {domain} Domain Bounty", self.player)
+            self.assertEqual(location.parent_region.name, region)
+
+    def test_third_domain_needs_all_of_wave_one(self) -> None:
+        self.collect_by_name([*ACT_I_PARTS, "Act II - Kevin Route 1", "Act II - Van Route 1"])
+        self.assertFalse(self.can_reach_region("Grim Garten - 3rd Domain"))
+        self.collect_by_name("Act II - Rean Route 1")
+        self.assertTrue(self.can_reach_region("Grim Garten - 3rd Domain"))
 
 
 class TestSideQuestsOff(TrailsBTHTestBase):

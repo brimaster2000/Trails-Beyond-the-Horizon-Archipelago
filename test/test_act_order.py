@@ -57,16 +57,6 @@ class TestGrimGarten(TrailsBTHTestBase):
         self.assertTrue(self.can_reach_location("Grim Garten - 1st Domain Cleared"))
 
 
-class TestGrimGartenSharedDomain(TrailsBTHTestBase):
-    options = {"grim_garten_chest_checks": 1}
-
-    def test_any_opening_route_reaches_domain(self) -> None:
-        self.collect_by_name(ACT_I_PARTS)
-        self.assertFalse(self.can_reach_location("Grim Garten - 3rd Domain Chest 1"))
-        self.collect_by_name("Act II - Kevin Route 1")
-        self.assertTrue(self.can_reach_location("Grim Garten - 3rd Domain Chest 1"))
-
-
 class TestGrimGartenGoal(TrailsBTHTestBase):
     options = {"goal": "all_acts_and_grim_garten"}
 

@@ -518,3 +518,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - never fire during a battle, cutscene, menu or map load: hold the popups and show them all once it's safe;
   - batch several items into one popup;
   - a fallback when the event doesn't finish (the client stops forcing popups for the session).
+
+## 2026-10-14: logic fix, Grim Garten bounties and domains (from the Neoseeker 4SPG list)
+- Playtest: Rean Route 1 was placed on "4SPG - Third Domain Bounty". Logic put the bounty in the 3rd domain, which it
+  said any one wave 1 route opens. The game only offers that bounty in Van Route 3, which needs Rean Route 1: deadlock.
+- Checked every 4SPG against Neoseeker's list: all story and side quests match their t_quest chapter. Only the four
+  domain bounties (chapter 65535) were wrong.
+- Fixes (scena_regions.py):
+  - bounties go to the route that offers them: First = Rean 2, Third = Van 3, Fifth = Van 5, Seventh = Van 6
+    (GRIM_GARTEN_BOUNTY_REGION);
+  - domains open where Neoseeker lists their first clear: 1 = Act I-B, 2 = Act I-C, 3 = Intermission (all of wave 1),
+    4 = Rean 2, 5 = Van 3, 6 = Van 4, 7 = Van 5, 8 = Van 6, 9 = Finale. This drops the old "any route of the wave"
+    guesses (4: R2/V2, 6: V4/K2, 8: R3/V6) to stay safe.
+- The current playtest seed was generated with the old logic: use `!getitem Act II - Rean Route 1`.
+- 90 tests pass.

@@ -44,8 +44,9 @@ INTERMISSION_AFTER_WAVE = 3  # index in WAVES of [R1, K1, V1]
 
 # Chapter id -> the region it belongs to (quests record their chapter in t_quest).
 CHAPTER_REGION = {chapter: name for name, chapter in CHAPTER_IDS.items()} | {0: PROLOGUE, 9: INTERMISSION}
-# Grim Garten bounties (chapter 65535 in t_quest) -> the domain they're found in.
-GRIM_GARTEN_BOUNTY_DOMAIN = {57: 1, 59: 3, 62: 5, 64: 7}
+# Grim Garten bounties (chapter 65535 in t_quest) -> the route that first offers them (Neoseeker 4SPG list). They come
+# well after their domain opens: the Third Domain Bounty only appears in Van Route 3 (a seed put Rean Route 1 there).
+GRIM_GARTEN_BOUNTY_REGION = {57: R2, 59: V3, 62: V5, 64: V6}
 
 # Source: the area list per act from the Neoseeker walkthrough (supplied by Brimaster2000), plus NoobFeed for Act I parts.
 SCENA_REGION: dict[str, str | None] = {
@@ -95,16 +96,18 @@ CHEST_REGION_OVERRIDES: dict[str, str] = {
     "Sandsea Chest 9": K2,  # Treasure08
 }
 
-# Grim Garten domain number -> the chapters that open it (any one of them is enough).
+# Grim Garten domain number -> the chapters that open it (any one of them is enough). Source: the Neoseeker 4SPG list
+# (each domain's first clear SP is listed under the route that opens it). Where a wave lets you pick the route order,
+# only the listed route counts, to stay safe.
 GRIM_GARTEN_DOMAINS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"]
 GRIM_GARTEN_DOMAIN_REGIONS: dict[int, list[str]] = {
-    1: [ACT_I_C],
+    1: [ACT_I_B],
     2: [ACT_I_C],  # Frosted Gorge
-    3: [R1, V1, K1],
-    4: [R2, V2],
+    3: [INTERMISSION],  # needs all three wave 1 routes
+    4: [R2],
     5: [V3],
-    6: [V4, K2],
+    6: [V4],
     7: [V5],
-    8: [R3, V6],
+    8: [V6],
     9: [FINALE],
 }

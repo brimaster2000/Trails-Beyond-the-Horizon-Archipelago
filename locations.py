@@ -8,7 +8,7 @@ from . import items
 from .data import CHESTS, QUESTS
 from .options import GrimGartenChestChecks, GrimGartenRepeatClears
 from .regions import grim_garten_region_name
-from .scena_regions import CHAPTER_REGION, CHEST_REGION_OVERRIDES, FINALE, GRIM_GARTEN_BOUNTY_DOMAIN, GRIM_GARTEN_DOMAIN_REGIONS, SCENA_REGION
+from .scena_regions import CHAPTER_REGION, CHEST_REGION_OVERRIDES, FINALE, GRIM_GARTEN_BOUNTY_REGION, GRIM_GARTEN_DOMAIN_REGIONS, SCENA_REGION
 
 if TYPE_CHECKING:
     from .world import trailsbthWorld
@@ -52,9 +52,7 @@ MAIN_REQUESTS = [q for q in QUESTS if q.kind == "main" and q.quest_id not in UNR
 
 
 def quest_region_name(quest) -> str:
-    if quest.quest_id in GRIM_GARTEN_BOUNTY_DOMAIN:
-        return grim_garten_region_name(GRIM_GARTEN_BOUNTY_DOMAIN[quest.quest_id])
-    return CHAPTER_REGION[quest.chapter]
+    return GRIM_GARTEN_BOUNTY_REGION.get(quest.quest_id) or CHAPTER_REGION[quest.chapter]
 
 
 class trailsbthLocation(Location):
