@@ -536,6 +536,12 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 ## 2026-10-14: logic fix, Blacklight District chests need Van Route 2
 - User (following Neoseeker): every Blacklight District (c1200) chest is only reachable during the fire in Van Route 2,
   not in Act I-B. The playtest seed put Van Route 2 itself in Blacklight District Chest 1: deadlock.
-- c1200 -> V2 for all four chests and the hack box (stricter is safe if the hack box opens earlier).
+- c1200 -> V2 for all four chests. The hack box is the exception: user confirmed it only opens in Act I-B
+  (CHEST_REGION_OVERRIDES).
 - Current seed: use `!getitem Act II - Van Route 2`. 91 tests pass.
 - TODO: check the other Act I maps against Neoseeker for chests that only open in a later route (like Sandsea 8/9).
+
+## NEXT (after this playtest): missable checks
+- User: every check in the game is permanently missable except Grim Garten (chests, 4SPGs, hack boxes all lock once
+  their act/route ends). The user has a design for handling this, and it will be the backbone of true Actsanity.
+  Get their design before starting.

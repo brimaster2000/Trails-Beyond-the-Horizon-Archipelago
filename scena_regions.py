@@ -94,6 +94,7 @@ SCENA_REGION: dict[str, str | None] = {
 CHEST_REGION_OVERRIDES: dict[str, str] = {
     "Sandsea Chest 8": K2,  # Treasure07: Sandsea part only open in Kevin Route 2
     "Sandsea Chest 9": K2,  # Treasure08
+    "Blacklight District Hack Box": ACT_I_B,  # the only Blacklight check open in Act I-B (playtest)
 }
 
 # Grim Garten domain number -> the chapters that open it (any one of them is enough). Source: the Neoseeker 4SPG list

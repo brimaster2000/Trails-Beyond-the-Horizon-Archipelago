@@ -30,8 +30,11 @@ class TestSideQuests(TrailsBTHTestBase):
 
     def test_blacklight_district_chests_need_van_route_2(self) -> None:
         # Playtest: every Blacklight District chest is only reachable during the fire in Van Route 2.
-        for name in ["Blacklight District Chest 1", "Blacklight District Hack Box"]:
-            self.assertEqual(self.multiworld.get_location(name, self.player).parent_region.name, "Act II - Van Route 2")
+        chest = self.multiworld.get_location("Blacklight District Chest 1", self.player)
+        self.assertEqual(chest.parent_region.name, "Act II - Van Route 2")
+        # ...except the hack box, which only opens in Act I-B (user confirmed).
+        hack_box = self.multiworld.get_location("Blacklight District Hack Box", self.player)
+        self.assertEqual(hack_box.parent_region.name, "Act I - B")
 
     def test_third_domain_needs_all_of_wave_one(self) -> None:
         self.collect_by_name([*ACT_I_PARTS, "Act II - Kevin Route 1", "Act II - Van Route 1"])
