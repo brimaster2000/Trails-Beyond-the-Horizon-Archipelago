@@ -569,3 +569,12 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - going back to the frontier after replaying an old act (jump to the frontier act's start, or a flag snapshot);
   - quest-table state (4SPG progress) is separate from the flags: check that it survives a jump;
   - what state the event jump does NOT restore (party levels/equipment are kept, which is what we want).
+
+## 2026-10-14: FIRST FULL PLAYTEST COMPLETE
+- 09:42: final boss beaten, the client detected the goal (flag 32478), the server registered it, and the auto-release ran.
+- Bugs found and fixed during the run (affect new seeds only): Sandsea Chests 8/9 (Kevin 2), Grim Garten bounties and
+  domains, Blacklight District chests (Van 2; hack box Act I-B). Worked around with !getitem: Van Route 3,
+  Rean Route 1, Van Route 2.
+- Item popups disabled (unreliable); live delivery + client log worked for the whole run.
+- Next: missable checks / Act Menu (see the design entry above). Before the next seed: audit the other maps' chests
+  against Neoseeker for later-route-only chests.
