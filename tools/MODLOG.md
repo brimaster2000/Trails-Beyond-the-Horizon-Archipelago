@@ -580,3 +580,31 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   against Neoseeker for later-route-only chests.
 - Chest audit against Neoseeker: done by the user during the run. Only Sandsea 8/9 and Blacklight District needed
   fixes (both done).
+
+## 2026-10-14: Act Menu research, part 2
+- User decisions: going back = "restart current act" (jump to the start of the latest act; inventory, levels and
+  opened chests kept). Entry point: a script spot first, pause-screen button later.
+- debug.FC_EventJump(group, route, event). The groups match the user's Act Menu one to one:
+
+  | Group | Act Menu entry | Route arg (chapter id) | First event |
+  |---|---|---|---|
+  | 1 | Prologue | - (0) | 101 |
+  | 2 | Act I | - (A=1 from 201, B=2 from 232, C=3 from 257) | 201 |
+  | 3 | Act II-A | Rean 1 = 18 (4), Kevin 1 = 19 (5), Van 1 = 20 (6) | 301 / 401 / 501 |
+  | 4 | Intermission | - (9) | 601 |
+  | 5 | Act II-B | Rean 2 = 21 (10), Van 2 = 22 (11) | 321 / 521 |
+  | 6 | Act II-C | Van 3 = 23 (12) | 541 |
+  | 7 | Act III-A | Kevin 2 = 24 (13), Van 4 = 25 (14) | 801 / 901 |
+  | 8 | Act III-B | Van 5 (15) | 931 |
+  | 9 | Act III-C | Rean 3 = 27 (16), Kevin 3 = 28 (17), Van 6 = 29 (18) | 701 / 841 / 951 |
+  | 10 | Finale | - (19) | 1001 |
+
+  ("First event" = the event number whose story flags start the chapter's range; confirm in game.)
+- Within a wave the jump ASKS "Do you want to assume that you have cleared Kevin Route (1)?" (Yes = run that route's
+  FC_All_FlagSet). Our Act Menu must answer from real progress: record which routes were cleared before the reset.
+- The jump also calls quest_set_state for quests and game_add_free_dungeon_floor_clear for Grim Garten when jumping
+  far enough; check what that does to 4SPG/Grim Garten progress already made.
+- a0000 = developer test map with an "Event Jump" NPC; the engine command debug_event_jump_menu still exists.
+- ENTRY POINT FOUND: system.OnCampMenuOpen(screen) runs whenever a pause-menu screen opens, and it already shows message
+  boxes there (tutorial prompts). Diagnostic build19 (installed; build18 backed up as script_eng_nopopups.p3a):
+  sets flag 43600 + screen, to map the screen numbers.

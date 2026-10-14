@@ -34,6 +34,10 @@ QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build
 # Item popups at chests and conversation ends. Off for now (playtest 2026-10-13: the chest popup kept showing an
 # older item); the popup functions stay in system.dat but nothing calls them. Must match IN_GAME_POPUPS in Client.py.
 ENABLE_POPUPS = False
+# Diagnostic (Act Menu research, 2026-10-14): OnCampMenuOpen(screen) sets flag CAMP_MENU_DIAG_FLAG + screen, to learn
+# which pause-menu screen has which number. Flags 43600-43663 are unused by the game (old diagnostics used 43400-43599).
+DIAGNOSE_CAMP_MENU = True
+CAMP_MENU_DIAG_FLAG = 43600
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
@@ -287,6 +291,11 @@ def patch_system_ing(source: str) -> str:
     chapter_end = "fn ChapterEnd(arg0: num = 0) {"
     assert source.count(chapter_end) == 1
     source = source.replace(chapter_end, MAIN_REQUEST_HOOK + chapter_end)
+    if DIAGNOSE_CAMP_MENU:
+        camp = "fn OnCampMenuOpen(arg0: num) {\n"
+        assert source.count(camp) == 1, "OnCampMenuOpen changed"
+        source = source.replace(
+            camp, camp + f"\tif arg0 >= 0 && arg0 < 64 {{\n\t\tset_flag({CAMP_MENU_DIAG_FLAG} + arg0);\n\t}}\n")
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
     return source.replace(anchor, HOOK.lstrip("\n") + anchor, 1)
