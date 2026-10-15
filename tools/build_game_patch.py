@@ -45,9 +45,16 @@ ACT_MENU_TEST_FLAG = 43700
 ACT_MENU_TEST_PICK_FLAG = 43710
 ACT_MENU_ENTRIES = ["Prologue", "Act I - A", "Act I - B", "Act I - C", "Act II - A", "Intermission", "Act II - B",
                     "Act II - C", "Act III - A", "Act III - B", "Act III - C", "Finale"]
+# Act Menu test 2 (2026-10-15): picking one of these runs debug.FC_EventJump(group, route, first event) straight from
+# the pause-menu hook. Story flags are rewritten: throwaway save only.
+ACT_MENU_JUMP_TEST = True
+ACT_MENU_JUMPS = [("Prologue", 1, 0, 101), ("Act I - A", 2, 0, 201), ("Act I - B", 2, 0, 232),
+                  ("Act I - C", 2, 0, 257), ("Act II - Rean Route 1", 3, 18, 301)]
 
 
 def act_menu_test_functions() -> str:
+    if ACT_MENU_JUMP_TEST:
+        return act_menu_jump_test_functions()
     items = "".join(f'\tmenu_additem(1, "{name}", {i});\n' for i, name in enumerate(ACT_MENU_ENTRIES))
     names = "".join(f'\tif choice == {i} {{\n\t\tname = "{name}";\n\t}}\n' for i, name in enumerate(ACT_MENU_ENTRIES))
     return (
@@ -74,6 +81,34 @@ def act_menu_test_functions() -> str:
         "\tmes_message_close();\n"
         "\tmes_reset_coordinate();\n"
         "\tmes_close_wait();\n"
+        "\treturn 0;\n"
+        "}\n\n"
+    )
+
+
+def act_menu_jump_test_functions() -> str:
+    items = "".join(f'\tmenu_additem(1, "{jump[0]}", {i});\n' for i, jump in enumerate(ACT_MENU_JUMPS))
+    jumps = "".join(
+        f"\tif choice == {i} {{\n\t\ttailcall debug.FC_EventJump({group}, {route}, {event});\n\t}}\n"
+        for i, (_, group, route, event) in enumerate(ACT_MENU_JUMPS))
+    return (
+        "// Archipelago: Act Menu jump test, opened from the pause menu while the test flag is set.\n"
+        "fn APActMenuTest() {\n"
+        f"\treset_flag({ACT_MENU_TEST_FLAG});\n"
+        "\tmes_coordinate(-1, 250, -1, -1);\n"
+        '\tsystem[5,8](65535, "<C1>Act Menu (jump test)", 10, "<C3>Story flags will be rewritten.</C>", 16, 22);\n'
+        "\tmenu_create(1, 0, 0, 28);\n"
+        f"{items}"
+        "\tmenu_open(1, -1, -1);\n"
+        "\tvar choice = menu_wait(1);\n"
+        "\tmenu_close(1);\n"
+        "\tmes_message_close();\n"
+        "\tmes_reset_coordinate();\n"
+        "\tif menu_is_canceled(1) {\n"
+        "\t\treturn 0;\n"
+        "\t}\n"
+        f"\tset_flag({ACT_MENU_TEST_PICK_FLAG} + choice);\n"
+        f"{jumps}"
         "\treturn 0;\n"
         "}\n\n"
     )
