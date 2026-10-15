@@ -608,3 +608,14 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - ENTRY POINT FOUND: system.OnCampMenuOpen(screen) runs whenever a pause-menu screen opens, and it already shows message
   boxes there (tutorial prompts). Diagnostic build19 (installed; build18 backed up as script_eng_nopopups.p3a):
   sets flag 43600 + screen, to map the screen numbers.
+
+## 2026-10-15: pause-menu screen numbers (diagnostic build19, VERIFIED in game)
+- OnCampMenuOpen(screen): 0 = the pause menu itself (fires as it opens), 1 Status, 2 Items, 3 Equipment,
+  4 Orbments, 5 Tactics, 12 Crafts. Achievements and System do NOT call it. (13 in the game's own code is probably
+  the Holo Core screen, reached from Orbments.) Returning to the pause menu from a screen does not fire 0 again.
+- Scripts can't read the controller: across all 1311 decompiled scripts the only input commands are pad_vibrate and
+  ui_wait_button ("press a button to continue"). So "right stick" needs the client: it reads the pad (XInput) or
+  keyboard and sets a flag while the button is held; OnCampMenuOpen(0) checks that flag and opens the Act Menu.
+  I.e. "hold right stick (R3) + open the pause menu".
+- Next tests: (1) can a menu run inside OnCampMenuOpen(0) (the game's own tutorials show messages there);
+  (2) can FC_EventJump run from there, or does the pause menu have to close first. Use a throwaway save.
