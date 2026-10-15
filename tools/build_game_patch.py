@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -50,6 +51,76 @@ ACT_MENU_ENTRIES = ["Prologue", "Act I - A", "Act I - B", "Act I - C", "Act II -
 ACT_MENU_JUMP_TEST = True
 ACT_MENU_JUMPS = [("Prologue", 1, 0, 101), ("Act I - A", 2, 0, 201), ("Act I - B", 2, 0, 232),
                   ("Act I - C", 2, 0, 257), ("Act II - Rean Route 1", 3, 18, 301)]
+
+
+# Progress records (Act Menu step 1, 2026-10-15). An act jump wipes the story flags of everything after its target, so
+# the patch copies "this act / route / Grim Garten domain is cleared" into flags the jump never resets.
+# A route is cleared once the LAST flag of its range in debug.dat's FC_All_FlagSet_<route> is set (checked on 49 saves:
+# mid-route saves never have it, finished routes always do). Act I's parts end at events 231 / 256 / the last one.
+ROUTE_CLEARED_FLAG_BASE = 41100  # + chapter id (41100-41119)
+DOMAIN_CLEARED_FLAG_BASE = 41130  # + Grim Garten domain (41134-41139)
+CHAPTER_DONE_STORY_FLAG = {
+    0: 32033, 1: 32065, 2: 32090, 3: 32115, 4: 32134, 5: 32180, 6: 32198, 9: 32245, 10: 32160, 11: 32215,
+    12: 32240, 13: 32310, 14: 32354, 15: 32378, 16: 32270, 17: 32331, 18: 32404,
+}
+DOMAIN_DONE_STORY_FLAG = {4: 33539, 5: 33544, 6: 33550, 7: 33554, 8: 33563, 9: 33573}
+# debug.dat's flag setter for each route -> its chapter id. Its jump asks "Do you want to assume that you have cleared
+# <route>?" before running one; the patch answers from the records instead.
+ROUTE_FLAGSET_CHAPTER = {
+    "2nd_Chapter_A": 4, "2nd_Chapter_B": 5, "2nd_Chapter_C": 6, "2nd_Chapter_A2": 10, "2nd_Chapter_C2": 11,
+    "2nd_Chapter_C3": 12, "3rd_Chapter_B1": 13, "3rd_Chapter_C1": 14, "3rd_Chapter_C2": 15, "3rd_Chapter_A1": 16,
+    "3rd_Chapter_B2": 17, "3rd_Chapter_C3": 18,
+}
+
+
+def record_progress_function() -> str:
+    lines = [f"\tif flag({story}) {{\n\t\tset_flag({ROUTE_CLEARED_FLAG_BASE + chapter});\n\t}}\n"
+             for chapter, story in CHAPTER_DONE_STORY_FLAG.items()]
+    lines += [f"\tif flag({story}) {{\n\t\tset_flag({DOMAIN_CLEARED_FLAG_BASE + domain});\n\t}}\n"
+              for domain, story in DOMAIN_DONE_STORY_FLAG.items()]
+    return ("// Archipelago: remember what is cleared, in flags an act jump never resets.\n"
+            "fn APRecordProgress() {\n" + "".join(lines) + "\treturn 0;\n}\n\n")
+
+
+# One "assume cleared?" prompt in debug.FC_Event_FlagSet: the message, a Yes/No menu, then `if var2 == 0 { setters }`.
+PROMPT_BLOCK = re.compile(
+    r"(?P<indent>\t+)\d+@mes_coordinate\(-1, 100, -1, -1\);\n(?P<prompt>(?:.*\n)*?)"
+    r"(?P=indent)\d+@mes_reset_coordinate\(\);\n(?:[ \t]*\n)?"
+    r"(?P=indent)\d+@if var2 == 0 \{\n(?P<body>(?:.*\n)*?)(?P=indent)\}\n")
+FLAGSET_CALL = re.compile(r"^\t+\d+@FC_All_FlagSet_(?P<name>\w+)\(\);$")
+
+
+def patch_debug_ing(source: str) -> str:
+    """Replaces each "assume cleared?" prompt with one check per setter: run it only if the records say cleared."""
+    replaced = 0
+
+    def answer(match: re.Match) -> str:
+        nonlocal replaced
+        if "assume that you have cleared" not in match.group("prompt"):
+            return match.group(0)  # the developers' Grim Garten event jumps (events 2000+): not used by the Act Menu
+        indent = match.group("indent")
+        lines = match.group("body").rstrip("\n").split("\n")
+        calls = [FLAGSET_CALL.match(line) for line in lines]
+
+        def record(call: re.Match) -> int:
+            name = call.group("name")
+            if name.startswith("FDungeon"):
+                return DOMAIN_CLEARED_FLAG_BASE + int(name[len("FDungeon"):])
+            return ROUTE_CLEARED_FLAG_BASE + ROUTE_FLAGSET_CHAPTER[name]
+
+        replaced += 1
+        found = [call for call in calls if call]
+        if len(found) == 1:  # one route; the body may also count it (`var4 = var4 + 1`), so keep the body together
+            body = "".join(f"\t{line}\n" for line in lines)
+            return f"{indent}if flag({record(found[0])}) {{\n{body}{indent}}}\n"
+        # "Grim Garten to the latest level": one setter per domain, each checked on its own
+        assert all(calls), f"unexpected lines in a cleared prompt: {lines!r}"
+        return "".join(f"{indent}if flag({record(call)}) {{\n\t{call.group(0)}\n{indent}}}\n" for call in calls)
+
+    source = PROMPT_BLOCK.sub(answer, source)
+    assert replaced == 25, f"expected 25 cleared prompts in debug.dat, replaced {replaced}"
+    assert "assume that you have cleared" not in source
+    return source
 
 
 def act_menu_test_functions() -> str:
@@ -108,6 +179,7 @@ def act_menu_jump_test_functions() -> str:
         "\t\treturn 0;\n"
         "\t}\n"
         f"\tset_flag({ACT_MENU_TEST_PICK_FLAG} + choice);\n"
+        "\tAPRecordProgress();\n"
         f"{jumps}"
         "\treturn 0;\n"
         "}\n\n"
@@ -333,7 +405,7 @@ def patch_system_ing(source: str) -> str:
         raise SystemExit("system.dat already has the Archipelago hook; pass an unpatched script_eng.p3a as SOURCE")
     assert source.count(CALL_SITE) == 1, "OnMapReinit changed; find a new call site"
     source = source.replace(
-        CALL_SITE, f"\t443@Patch101();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\t445@return;\n}}")
+        CALL_SITE, f"\t443@Patch101();\n\treset_flag({GG_CLEAR_GUARD_FLAG});\n\tAPRecordProgress();\n\t445@return;\n}}")
     # Grim Garten chests: count right after the chest's contents are handed over.
     # Popup sites: after a chest (where TBoxProcess shows its own "Earned 1 SP." message) and at the end of a
     # conversation (still inside the talk event, before event_end).
@@ -377,7 +449,7 @@ def patch_system_ing(source: str) -> str:
                                 + f"\tif arg0 == 0 && flag({ACT_MENU_TEST_FLAG}) {{\n\t\tAPActMenuTest();\n\t}}\n")
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
-    return source.replace(anchor, HOOK.lstrip("\n") + anchor, 1)
+    return source.replace(anchor, HOOK.lstrip("\n") + record_progress_function() + anchor, 1)
 
 
 # Act gating, in sys_event.dat EV_NEXT_CHAPTER_END (the only place the game picks the next chapter).
@@ -557,6 +629,12 @@ def main(game: Path, kurotools: Path, work: Path, source_archive: Path) -> None:
     (work / "sys_event_ap.ing").write_text(
         patch_sys_event_ing((work / "sys_event.ing").read_text(encoding="utf-8")), encoding="utf-8")
     run(game / "ingert.exe", "-o", sys_event_dat, work / "sys_event_ap.ing")
+
+    debug_dat = extracted / "script_eng" / "scena" / "debug.dat"
+    run(game / "ingert.exe", "-o", work / "debug.ing", debug_dat)
+    (work / "debug_ap.ing").write_text(patch_debug_ing((work / "debug.ing").read_text(encoding="utf-8")),
+                                       encoding="utf-8")
+    run(game / "ingert.exe", "-o", debug_dat, work / "debug_ap.ing")
 
     final_dat = extracted / "script_eng" / "scena" / "d8020.dat"
     run(game / "ingert.exe", "-o", work / "d8020.ing", final_dat)

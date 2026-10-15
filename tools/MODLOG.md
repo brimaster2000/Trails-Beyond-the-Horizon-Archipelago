@@ -640,3 +640,17 @@ The game has no network or file I/O hooks we can use from scripts. Options:
      the latest act);
   3. client: hold right stick (XInput) or a key -> flag; the pause-menu hook opens the Act Menu only then;
   4. check what the jump's quest_set_state / game_add_free_dungeon_floor_clear do to real progress.
+
+## 2026-10-15: Act Menu step 1, progress records + automatic "assume cleared?" answers (build22)
+- Verified on all 49 backed-up saves: a route is cleared exactly when the LAST flag of its debug.dat range is set
+  (mid-route saves never have it). Same for Grim Garten domains 4-9 (33539/33544/33550/33554/33563/33573; 8 and 9
+  leave a few optional flags unset) and Act I parts (A 32065 = event 231, B 32090 = event 256, C 32115).
+- system.APRecordProgress(): copies those into ROUTE_CLEARED_FLAG_BASE 41100 + chapter and
+  DOMAIN_CLEARED_FLAG_BASE 41130 + domain (flags the jump never resets). Runs on every map load (OnMapReinit) and
+  right before an Act Menu jump.
+- debug.dat patched (patch_debug_ing): the 25 "Do you want to assume that you have cleared ...?" prompts in
+  FC_Event_FlagSet are replaced by `if flag(record) { FC_All_FlagSet_<route>(); }` (domain prompts: one check per
+  domain; a route's `var4 = var4 + 1` counter stays inside its check). The 7 other menus (the developers' Grim
+  Garten event jumps, events 2000+) are untouched.
+- To test: a save with only some routes cleared (e.g. save086: Kevin 1 done) -> jump to Rean 1: no prompts, Kevin 1
+  range full, Van 1 empty. A save with domains 4-5 cleared (save091) -> jump to Van 3: domain 4 flags set.
