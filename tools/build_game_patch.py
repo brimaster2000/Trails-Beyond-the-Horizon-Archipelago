@@ -36,8 +36,47 @@ QUEST_FLAG_BASE = 42000  # quest q completed -> flag 42000 + q (must match build
 ENABLE_POPUPS = False
 # Diagnostic (Act Menu research, 2026-10-14): OnCampMenuOpen(screen) sets flag CAMP_MENU_DIAG_FLAG + screen, to learn
 # which pause-menu screen has which number. Flags 43600-43663 are unused by the game (old diagnostics used 43400-43599).
-DIAGNOSE_CAMP_MENU = True
+DIAGNOSE_CAMP_MENU = False
 CAMP_MENU_DIAG_FLAG = 43600
+# Act Menu test 1 (2026-10-15): with flag ACT_MENU_TEST_FLAG set, opening the pause menu shows the Act Menu list.
+# Picking an entry only shows a message and sets flag ACT_MENU_TEST_PICK_FLAG + entry; nothing jumps yet.
+ACT_MENU_TEST = True
+ACT_MENU_TEST_FLAG = 43700
+ACT_MENU_TEST_PICK_FLAG = 43710
+ACT_MENU_ENTRIES = ["Prologue", "Act I - A", "Act I - B", "Act I - C", "Act II - A", "Intermission", "Act II - B",
+                    "Act II - C", "Act III - A", "Act III - B", "Act III - C", "Finale"]
+
+
+def act_menu_test_functions() -> str:
+    items = "".join(f'\tmenu_additem(1, "{name}", {i});\n' for i, name in enumerate(ACT_MENU_ENTRIES))
+    names = "".join(f'\tif choice == {i} {{\n\t\tname = "{name}";\n\t}}\n' for i, name in enumerate(ACT_MENU_ENTRIES))
+    return (
+        "// Archipelago: Act Menu test, opened from the pause menu while the test flag is set.\n"
+        "fn APActMenuTest() {\n"
+        f"\treset_flag({ACT_MENU_TEST_FLAG});\n"
+        "\tmes_coordinate(-1, 250, -1, -1);\n"
+        '\tsystem[5,8](65535, "<C1>Act Menu (test)", 10, "<C3>Pick an act. Nothing will happen yet.</C>", 16, 22);\n'
+        "\tmenu_create(1, 0, 0, 28);\n"
+        f"{items}"
+        "\tmenu_open(1, -1, -1);\n"
+        "\tvar choice = menu_wait(1);\n"
+        "\tmenu_close(1);\n"
+        "\tmes_message_close();\n"
+        "\tif menu_is_canceled(1) {\n"
+        "\t\tmes_reset_coordinate();\n"
+        "\t\treturn 0;\n"
+        "\t}\n"
+        f"\tset_flag({ACT_MENU_TEST_PICK_FLAG} + choice);\n"
+        '\tvar name = "";\n'
+        f"{names}"
+        '\tsystem[5,8](65535, "<C1>You picked ", name, ".</C>", 16);\n'
+        "\twait_prompt();\n"
+        "\tmes_message_close();\n"
+        "\tmes_reset_coordinate();\n"
+        "\tmes_close_wait();\n"
+        "\treturn 0;\n"
+        "}\n\n"
+    )
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
@@ -296,6 +335,11 @@ def patch_system_ing(source: str) -> str:
         assert source.count(camp) == 1, "OnCampMenuOpen changed"
         source = source.replace(
             camp, camp + f"\tif arg0 >= 0 && arg0 < 64 {{\n\t\tset_flag({CAMP_MENU_DIAG_FLAG} + arg0);\n\t}}\n")
+    if ACT_MENU_TEST:
+        camp = "fn OnCampMenuOpen(arg0: num) {\n"
+        assert source.count(camp) == 1, "OnCampMenuOpen changed"
+        source = source.replace(camp, act_menu_test_functions() + camp
+                                + f"\tif arg0 == 0 && flag({ACT_MENU_TEST_FLAG}) {{\n\t\tAPActMenuTest();\n\t}}\n")
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
     return source.replace(anchor, HOOK.lstrip("\n") + anchor, 1)
