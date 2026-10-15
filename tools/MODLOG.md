@@ -619,3 +619,24 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   I.e. "hold right stick (R3) + open the pause menu".
 - Next tests: (1) can a menu run inside OnCampMenuOpen(0) (the game's own tutorials show messages there);
   (2) can FC_EventJump run from there, or does the pause menu have to close first. Use a throwaway save.
+
+## 2026-10-15: Act Menu tests 1 and 2 PASSED (in game)
+- Test 1 (build20): a menu inside OnCampMenuOpen(0) works. It opens as the pause menu opens, confirm and cancel both
+  work, the pick is recorded, and the pause menu works normally afterwards.
+- Test 2 (build21): `tailcall debug.FC_EventJump(group, route, event)` straight from the pause-menu hook works.
+  - Act I-A (2, 0, 201): cutscene played, Van's party. Story flags were reset to the Act I-A start (Prologue 34/34,
+    Act I 3/81, later ranges empty). Opened chests (50), AP flags (chapter unlocks, quest-done) were untouched;
+    opened chests stay open in the field. Battles fine.
+  - 4SPGs: finished ones stay "done" but can be completed again (harmless for AP; rewards can be farmed).
+  - Rean Route 1 (3, 18, 301): the developer prompts appeared; answered Kevin Yes / Van No. Rean's party and the
+    cutscene played. Flags: Act I 81/81, Rean 1 1/15 (just started), Kevin 1 32165-32180 16/16, Van 1
+    32185-32198 0/14. So each prompt is applied on its own.
+  - Route flag ranges: Rean 1 32120-32134 (2nd_Chapter_A), Kevin 1 32165-32180 (_B), Van 1 32185-32198 (_C).
+- Saves were backed up before test 2 to Archipelago/save_backup_2026-10-15.
+- Next (real Act Menu):
+  1. track which routes were cleared in our own flags (ChapterEnd), and answer the "assume cleared?" prompts from them
+     (own copy of FC_Event_FlagSet without the prompts, or patch debug.dat);
+  2. per-wave route sub-menus; entries locked or greyed by AP items/progress; "Return to current act" (restart
+     the latest act);
+  3. client: hold right stick (XInput) or a key -> flag; the pause-menu hook opens the Act Menu only then;
+  4. check what the jump's quest_set_state / game_add_free_dungeon_floor_clear do to real progress.
