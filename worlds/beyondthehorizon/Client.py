@@ -1,0 +1,518 @@
+import asyncio
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+import colorama
+
+from CommonClient import CommonContext, gui_enabled, logger, server_loop, get_base_parser, ClientCommandProcessor, handle_url_arg
+from NetUtils import ClientStatus
+
+from . import save_reader
+from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
+from .items import ITEM_NAME_TO_ID
+from .game_memory import (
+    ACT_MENU_REQUEST_FLAG, CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_PENDING_FLAG,
+    POPUP_RECEIVED,
+    read_marker, seed_marker,
+)
+from .locations import grim_garten_chest_id, grim_garten_clear_id
+from .options import Goal, GrimGartenChestChecks, GrimGartenRepeatClears
+from .scena_regions import CHAPTER_IDS
+
+# AP location id -> scenario flag the game sets for it (chest opened, or set by our patch when a quest completes).
+CHEST_LOCATION_FLAGS = {chest.id: chest.flag for chest in CHESTS if chest.flag is not None}
+CHEST_LOCATION_FLAGS |= {quest.id: quest.flag for quest in QUESTS}
+# AP item id -> [(game item id, quantity), ...]. Story items (Acts) give nothing in game yet.
+ITEM_CONTENTS = {ap_id: contents for ap_id, contents in GAME_ITEMS.values()}
+# Game item id -> a readable name for the client log (single-item AP items carry the game item's name).
+GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, contents) in GAME_ITEMS.items()
+                   if len(contents) == 1}
+# AP item id of each act item -> the chapter it unlocks.
+STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
+POLL_SECONDS = 0.25  # a chest waits up to 1 s for its popup
+ACT_MENU_POLL_SECONDS = 0.05  # the Act Menu button is held only briefly while pausing
+# Off for now (playtest 2026-10-13: the chest popup kept showing an older item). Must match ENABLE_POPUPS in
+# tools/build_game_patch.py. Items still go straight into the inventory and the client log lists them.
+IN_GAME_POPUPS = False
+SLOW_CALL_SECONDS = 2.0
+LOOP_LAG_WARNING_SECONDS = 2.0
+STACK_DUMP_SECONDS = 3.0
+# Event flag of EV_04_14_01 "After the battle, Grendel ... leaves" (t_evtable): set once the final boss is beaten.
+# Verified on saves: "Before the Final Battle" doesn't have it, the post-game "Clear Data" save does.
+FINAL_BOSS_DEFEATED_FLAG = 32478
+# Chapter flag of the Prologue (t_chapter): set in every real save. The title screen already has an (empty) game
+# state object, so without this check the client would link and write into it.
+GAME_STARTED_FLAG = 32000
+
+
+def goal_requirements_missing(flags: bytes, offset: int, goal: int) -> list[str]:
+    """What the goal needs besides the final boss. The game itself only reaches the Finale with every route done."""
+    if goal != Goal.option_all_acts_and_grim_garten:
+        return []
+    return [f"Grim Garten domain {domain}" for domain in range(1, 10)
+            if save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16 + 8, offset) == 0]
+
+
+def missing_for_goal(flags: bytes, offset: int, goal: int) -> list[str] | None:
+    """None until the final boss is beaten; then what the goal still needs ([] = goal complete)."""
+    if not save_reader.flag_is_set(flags, FINAL_BOSS_DEFEATED_FLAG, offset):
+        return None
+    return goal_requirements_missing(flags, offset, goal)
+
+
+def grim_garten_checks(flags: bytes, offset: int) -> set[int]:
+    """Locations reached by the per-domain chest/clear counters; the server only counts those in the seed."""
+    found = set()
+    for domain in range(1, 10):
+        chests = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16, offset)
+        clears = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16 + 8, offset)
+        found |= {grim_garten_chest_id(domain, n) for n in range(1, min(chests, GrimGartenChestChecks.range_end) + 1)}
+        found |= {grim_garten_clear_id(domain, k) for k in range(1, min(clears, GrimGartenRepeatClears.range_end + 1) + 1)}
+    return found
+
+
+def deliveries(items_received) -> list[tuple[int, int]]:
+    """Every (game item, quantity) the game should have been given, in the order AP sent them."""
+    return [pair for item in items_received for pair in ITEM_CONTENTS.get(item.item, [])]
+
+
+class TBTHCommandProcessor(ClientCommandProcessor):
+    def _cmd_tbth(self):
+        """Show the game connection state"""
+        if isinstance(self.ctx, TBTHContext):
+            logger.info(f"Game: {'attached' if self.ctx.game_memory else 'not attached (start the game and load a save)'}")
+            logger.info(f"Save folder: {self.ctx.save_dir}")
+            logger.info(f"Act Menu: hold R3 (right stick in) or {self.ctx.act_menu_key} while opening the pause menu")
+
+    def _cmd_install_patch(self, folder: str = ""):
+        """Install the game patch (close the game first). Optional: the game folder, if it isn't found"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("install", folder))
+
+    def _cmd_uninstall_patch(self, folder: str = ""):
+        """Remove the game patch and restore the original script_eng.p3a (close the game first)"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("uninstall", folder))
+
+    def _cmd_patch_status(self, folder: str = ""):
+        """Show whether the game patch is installed"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("status", folder))
+
+    def _cmd_act_menu_key(self, key: str = ""):
+        """Set the keyboard key that opens the Act Menu when held while pausing (e.g. F1, F2, TAB, Q)"""
+        if not isinstance(self.ctx, TBTHContext):
+            return
+        from .controller import KEY_CODES, key_code
+
+        if key_code(key) is None:
+            logger.info(f"Act Menu key is {self.ctx.act_menu_key}. Choose one of: {', '.join(KEY_CODES)}")
+            return
+        self.ctx.set_act_menu_key(key)
+        logger.info(f"Act Menu key set to {self.ctx.act_menu_key} (remembered for next time)")
+
+
+class TBTHContext(CommonContext):
+    game = "Trails Beyond the Horizon"
+    command_processor = TBTHCommandProcessor
+    items_handling = 0b111
+
+    def __init__(self, server_address: Optional[str], password: Optional[str]) -> None:
+        super().__init__(server_address, password)
+        self.save_dir: Path = save_reader.DEFAULT_SAVE_DIR
+        self.last_save: Optional[Path] = None
+        self.last_save_mtime = 0
+        self.game_memory = None  # game_memory.GameMemory while attached to kai.exe
+        self.warned_marker = 0  # marker of a foreign save we already warned about
+        self.popup_backlog: list[tuple[int, int]] = []  # items from other worlds not yet announced in game
+        self.found_popups: list[tuple[int, int, int, int]] = []  # (kind, item, qty, more) for checks just found
+        self.scouted: dict[int, object] = {}  # location id -> NetworkItem (what each of our locations holds)
+        self.announced_locations: set[int] = set()  # own items already shown when their chest was opened
+        self.act_menu_pads = None  # controller.Controllers, created by act_menu_button_watcher
+        self.act_menu_key = self.saved_act_menu_key()
+        self.save_reading_unavailable = False
+        self.goal = Goal.default
+        self.grim_garten_chest_checks = GrimGartenChestChecks.default
+        self.grim_garten_seen: dict[int, int] = {}  # domain -> chests counted, to explain chests past the checks
+        self.goal_missing: list[str] | None = None  # last reported, to avoid repeating the log line
+
+    @staticmethod
+    def saved_act_menu_key() -> str:
+        import Utils
+        from .controller import DEFAULT_ACT_MENU_KEY, key_code
+
+        key = Utils.persistent_load().get("tbth", {}).get("act_menu_key", DEFAULT_ACT_MENU_KEY)
+        return key.upper() if key_code(key) is not None else DEFAULT_ACT_MENU_KEY
+
+    def set_act_menu_key(self, key: str) -> None:
+        import Utils
+        from .controller import key_code
+
+        self.act_menu_key = key.strip().upper()
+        Utils.persistent_store("tbth", "act_menu_key", self.act_menu_key)
+        if self.act_menu_pads is not None:
+            self.act_menu_pads.key = key_code(self.act_menu_key)
+
+    async def run_patcher(self, action: str, folder: str = "") -> None:
+        from . import patcher
+        from .game_memory import find_game_pid
+
+        game_folder = Path(folder.strip('"')) if folder else await asyncio.to_thread(patcher.find_game_folder)
+        if game_folder is None or not (game_folder / "kai.exe").exists():
+            logger.info("Game folder not found. Give it as an argument, e.g. "
+                        f'/{action}_patch "D:\\SteamLibrary\\steamapps\\common\\{patcher.GAME_FOLDER_NAME}"')
+            return
+        delta, info = patcher.patch_data()
+        if action == "status":
+            state = await asyncio.to_thread(patcher.status, game_folder, info)
+            logger.info({"patched": "Game patch: installed.", "vanilla": "Game patch: not installed (/install_patch).",
+                         "missing": f"Game patch: no {patcher.ARCHIVE} in {game_folder}.",
+                         "unknown": f"Game patch: {patcher.ARCHIVE} is an unknown version (game update or other "
+                                    "mods?)."}[state])
+            return
+        if await asyncio.to_thread(find_game_pid) is not None:
+            logger.info("Close the game first, then try again.")
+            return
+        if action == "install":
+            logger.info(await asyncio.to_thread(patcher.install, game_folder, delta, info))
+        else:
+            logger.info(await asyncio.to_thread(patcher.uninstall, game_folder, info))
+
+    def run_gui(self):
+        """Import kivy UI system and start running it as self.ui_task."""
+        # Drawing the window waits on the GPU, which a fullscreen game can hold for many seconds; that froze the
+        # whole client in the playtest (every stall dump was inside kivy on_draw / texture_update). Draw less.
+        try:
+            from kivy.config import Config
+            Config.set("graphics", "vsync", "0")
+            Config.set("graphics", "maxfps", "20")
+        except Exception as e:
+            logger.debug(f"Could not adjust kivy graphics settings: {e}")
+        from kvui import GameManager
+
+        class TBTHManager(GameManager):
+            logging_pairs = [
+                ("Client", "Archipelago")
+            ]
+            base_title = "Archipelago TBTH Client"
+
+        self.ui = TBTHManager(self)
+        self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
+
+    async def server_auth(self, password_requested: bool = False):
+        """Wrapper for login."""
+        if password_requested and not self.password:
+            await super().server_auth(password_requested)
+        await self.get_username()
+        await self.send_connect()
+
+    @property
+    def marker(self) -> int:
+        """Identifies this seed + slot; written into a save the first time the client sees it."""
+        return seed_marker(self.seed_name or "", self.slot or 0)
+
+    def save_is_ours(self, marker: int, where: str) -> bool:
+        if marker == self.marker:
+            return True
+        if marker and marker != self.warned_marker:
+            self.warned_marker = marker
+            logger.warning(f"{where} belongs to a different seed or slot; ignoring it. Load a save from this seed "
+                           f"or start a new game.")
+        return False
+
+    def on_package(self, cmd: str, args: dict) -> None:
+        super().on_package(cmd, args)
+        if cmd == "LocationInfo":
+            for item in args["locations"]:
+                self.scouted[item.location] = item
+            logger.info(f"Learned what {len(args['locations'])} locations hold (for the in-game chest popups)")
+        if cmd == "Connected":
+            # Learn what every location holds, so a chest's popup can show its own contents at once.
+            locations = list(set(args.get("missing_locations", [])) | set(args.get("checked_locations", [])))
+            asyncio.create_task(self.send_msgs([{"cmd": "LocationScouts", "locations": locations, "create_as_hint": 0}]))
+            self.goal = args.get("slot_data", {}).get("goal", Goal.default)
+            self.grim_garten_chest_checks = args.get("slot_data", {}).get(
+                "grim_garten_chest_checks", GrimGartenChestChecks.default)
+
+    async def check_goal(self, flags: bytes, offset: int) -> None:
+        if self.finished_game:
+            return
+        missing = missing_for_goal(flags, offset, self.goal)
+        if missing == []:
+            await self.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
+            self.finished_game = True
+            logger.info("Goal complete! The final boss has been defeated.")
+        elif missing and missing != self.goal_missing:
+            logger.info("Final boss defeated, but the goal still needs: " + ", ".join(missing))
+        self.goal_missing = missing
+
+    def explain_extra_grim_garten_chests(self, flags: bytes) -> None:
+        for domain in range(1, 10):
+            count = save_reader.read_counter8(flags, GG_FLAG_BASE + domain * 16, 0)
+            seen = self.grim_garten_seen.setdefault(domain, count)
+            if count > seen and count > self.grim_garten_chest_checks:
+                logger.info(f"Grim Garten domain {domain}: chest {count} opened (this seed has "
+                            f"{self.grim_garten_chest_checks} chest checks per domain)")
+            self.grim_garten_seen[domain] = count
+
+    def popup_for_found(self, location: int) -> tuple[int, int, int, int] | None:
+        """The popup describing what a just-opened location held, from the scouted contents."""
+        item = self.scouted.get(location)
+        if item is None:
+            return None
+        if item.player != self.slot:
+            return POPUP_FOUND_OTHER, 0, 0, 0
+        self.announced_locations.add(location)
+        if item.item in STORY_ITEM_CHAPTERS:
+            return POPUP_FOUND_ACT, 0, 0, 0
+        contents = ITEM_CONTENTS.get(item.item)
+        if not contents:
+            return None
+        game_item_id, quantity = contents[0]
+        return POPUP_FOUND_OWN, game_item_id, quantity, len(contents) - 1
+
+    async def report_checks(self, found: set[int], source: str) -> None:
+        found = (found & self.missing_locations) - self.locations_checked
+        if found:
+            if source == "game":  # live: the player just opened it (not when reading saves with the game closed)
+                self.found_popups += [p for p in map(self.popup_for_found, sorted(found)) if p]
+            logger.info(f"Found {len(found)} new check(s) ({source})")
+            self.locations_checked |= found
+            await self.send_msgs([{"cmd": "LocationChecks", "locations": list(found)}])
+
+    async def check_newest_save(self) -> None:
+        """Fallback while not attached to the game: it autosaves after every chest."""
+        if self.save_reading_unavailable:
+            return
+        try:
+            import zstandard  # noqa: F401  (not bundled with every Archipelago install)
+        except ImportError:
+            self.save_reading_unavailable = True
+            logger.info("Checks are read from the running game only (reading save files needs the zstandard package)")
+            return
+        save = save_reader.newest_save(self.save_dir)
+        if save is None:
+            return
+        mtime = save.stat().st_mtime_ns
+        if save == self.last_save and mtime == self.last_save_mtime:
+            return
+        try:
+            data = await asyncio.to_thread(save_reader.decompress_save, save)
+        except Exception as e:  # the game may still be writing it; try again next poll
+            logger.debug(f"Could not read {save}: {e}")
+            return
+        self.last_save, self.last_save_mtime = save, mtime
+        # Only saves the client has linked to this seed; anything else may be another playthrough.
+        if self.save_is_ours(read_marker(data[save_reader.FLAG_ARRAY_OFFSET:]), save.parent.name):
+            await self.report_checks(save_reader.checked_locations(data, CHEST_LOCATION_FLAGS)
+                                     | grim_garten_checks(data, save_reader.FLAG_ARRAY_OFFSET), save.parent.name)
+            await self.check_goal(data, save_reader.FLAG_ARRAY_OFFSET)
+
+    def attach(self) -> None:
+        from . import game_memory
+
+        pid = game_memory.find_game_pid()
+        if pid is not None:
+            self.game_memory = game_memory.GameMemory(pid, writable=True)
+            logger.info(f"Attached to the game (pid {pid})")
+
+    def detach(self) -> None:
+        if self.game_memory:
+            self.game_memory.close()
+            self.game_memory = None
+            logger.info("Lost the game; waiting for it to start again")
+
+    async def game_io(self, function, *args):
+        """Runs a game-memory call on a worker thread: a slow Windows call must never block the event loop, or the
+        server's keepalive pings go unanswered and it drops the connection (seen in the playtest)."""
+        started = time.monotonic()
+        result = await asyncio.to_thread(function, *args)
+        took = time.monotonic() - started
+        if took > SLOW_CALL_SECONDS:
+            logger.warning(f"Game access {getattr(function, '__name__', function)} took {took:.1f}s")
+        return result
+
+    async def sync_with_game(self) -> None:
+        flags = await self.game_io(self.game_memory.read_flags)
+        if flags is None or not save_reader.flag_is_set(flags, GAME_STARTED_FLAG, 0):  # title screen, no save loaded
+            return
+        marker = read_marker(flags)
+        if marker == 0:  # a save this client hasn't seen: link it to this seed
+            await self.game_io(self.game_memory.write_marker, self.marker)
+            logger.info("Linked the loaded save to this seed")
+        elif not self.save_is_ours(marker, "The loaded save"):
+            return
+        await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
+                                 | grim_garten_checks(flags, 0), "game")
+        await self.check_goal(flags, 0)
+        self.explain_extra_grim_garten_chests(flags)
+        # The final boss door (after Mirabelle) opens once the goal needs nothing but the boss.
+        if not save_reader.flag_is_set(flags, GOAL_DOOR_FLAG, 0) and not goal_requirements_missing(flags, 0, self.goal):
+            await self.game_io(self.game_memory.set_flag, GOAL_DOOR_FLAG)
+            logger.info("Goal requirements met: the way to the final boss is open")
+
+        # Act items unlock their chapter at once (the gate's "Check again" sees it live).
+        for item in self.items_received:
+            chapter = STORY_ITEM_CHAPTERS.get(item.item)
+            if chapter is not None and not save_reader.flag_is_set(flags, CHAPTER_FLAG_BASE + chapter, offset=0):
+                await self.game_io(self.game_memory.set_flag, CHAPTER_FLAG_BASE + chapter)
+                logger.info(f"Unlocked chapter {chapter} in game")
+
+        # Received items go straight into the live inventory. The saved counter moves with each one, so a reloaded
+        # older save gets everything received after it again.
+        pending = [(pair, item.player == self.slot and item.location in self.announced_locations)
+                   for item in self.items_received for pair in ITEM_CONTENTS.get(item.item, [])]
+        count = await self.game_io(self.game_memory.received_count)
+        while count < len(pending):
+            (game_item_id, quantity), already_shown = pending[count]
+            added = await self.game_io(self.game_memory.add_item, game_item_id, quantity,
+                                    ITEM_STACK_LIMITS.get(game_item_id, 99))
+            count += 1
+            await self.game_io(self.game_memory.set_received_count, count)
+            if added and not already_shown:
+                self.popup_backlog.append((game_item_id, added))
+            name = GAME_ITEM_NAMES.get(game_item_id, f"item {game_item_id}")
+            if added < quantity:
+                logger.info(f"Received {name} x{quantity} (inventory full: only {added} fit)")
+            else:
+                logger.info(f"Received {name} x{quantity}")
+
+        if not IN_GAME_POPUPS:
+            self.found_popups.clear()
+            self.popup_backlog.clear()
+            if save_reader.flag_is_set(flags, POPUP_PENDING_FLAG, 0):  # left waiting in a save from an older build
+                await self.game_io(self.game_memory.set_flag, POPUP_PENDING_FLAG, False)
+            return
+        # In-game popups, one at a time: what a just-opened chest held comes first (the chest waits up to 1 s for
+        # it), then one summary of items that arrived from other worlds. A chest's own popup takes the place of a
+        # "Received" popup still waiting, or that older one would show at this chest (seen in the playtest).
+        if self.found_popups and await self.game_io(self.game_memory.popup_pending):
+            kind, game_item_id, quantity, more = await self.game_io(self.game_memory.read_popup)
+            if kind == POPUP_RECEIVED:
+                self.popup_backlog.insert(0, (game_item_id, quantity))
+                kind, game_item_id, quantity, more = self.found_popups.pop(0)
+                await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, more, kind, True)
+        if (self.found_popups or self.popup_backlog) and not await self.game_io(self.game_memory.popup_pending):
+            if self.found_popups:
+                kind, game_item_id, quantity, more = self.found_popups.pop(0)
+            else:
+                kind, (game_item_id, quantity), more = POPUP_RECEIVED, self.popup_backlog[0], len(self.popup_backlog) - 1
+                self.popup_backlog.clear()
+            await self.game_io(self.game_memory.queue_popup, game_item_id, quantity, more, kind)
+
+
+async def game_watcher(ctx: TBTHContext) -> None:
+    while not ctx.exit_event.is_set():
+        if ctx.server and ctx.slot is not None:
+            try:
+                if ctx.game_memory is None:
+                    await asyncio.to_thread(ctx.attach)
+                if ctx.game_memory is not None:
+                    await ctx.sync_with_game()
+                else:
+                    await ctx.check_newest_save()
+            except OSError as e:  # game closed or memory unreadable
+                logger.debug(f"Game access failed: {e}")
+                ctx.detach()
+        await asyncio.sleep(POLL_SECONDS)
+
+
+async def act_menu_button_watcher(ctx: TBTHContext, pads=None) -> None:
+    """Holding the right stick in (R3) or the Act Menu key while opening the pause menu opens the Act Menu: the request
+    flag is set while the button is held and cleared on release (the game also clears it when it opens the menu)."""
+    if pads is None:
+        from .controller import Controllers
+
+        pads = Controllers(ctx.act_menu_key)
+    ctx.act_menu_pads = pads
+    if not pads.available:
+        logger.warning("No controller or keyboard access: the Act Menu button won't work")
+        return
+    applied = False  # what the game's flag was last set to
+    while not ctx.exit_event.is_set():
+        held = await asyncio.to_thread(pads.act_menu_held)
+        if held != applied and ctx.game_memory is not None:
+            try:
+                await ctx.game_io(ctx.game_memory.set_flag, ACT_MENU_REQUEST_FLAG, held)
+                applied = held
+            except (OSError, RuntimeError):  # game closing, or no save loaded yet: try again next poll
+                pass
+        await asyncio.sleep(ACT_MENU_POLL_SECONDS)
+
+
+def opt_out_of_power_throttling() -> None:
+    """Windows throttles background apps (Efficiency mode / EcoQoS). In the playtest that froze this whole process for
+    20-50 s at a time while the game had focus, and the server dropped the client. Ask Windows not to throttle it."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class PowerThrottlingState(ctypes.Structure):
+        _fields_ = [("Version", wt.ULONG), ("ControlMask", wt.ULONG), ("StateMask", wt.ULONG)]
+
+    execution_speed, ignore_timer_resolution = 0x1, 0x4
+    state = PowerThrottlingState(1, execution_speed | ignore_timer_resolution, 0)  # controlled, and switched off
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wt.HANDLE
+    kernel32.SetProcessInformation.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, wt.DWORD]
+    process_power_throttling = 4  # PROCESS_INFORMATION_CLASS.ProcessPowerThrottling
+    if kernel32.SetProcessInformation(kernel32.GetCurrentProcess(), process_power_throttling,
+                                      ctypes.byref(state), ctypes.sizeof(state)):
+        logger.info("Windows background throttling disabled for this client")
+    else:
+        logger.warning(f"Could not disable Windows background throttling (error {ctypes.get_last_error()})")
+
+
+async def loop_watchdog(ctx: TBTHContext, seconds: float = 1.0) -> None:
+    """Logs when the event loop wakes up late: a blocked loop can't answer the server's keepalive pings."""
+    import faulthandler
+    import Utils
+
+    # If the loop goes STACK_DUMP_SECONDS without checking in, Python writes every thread's stack to this file.
+    stack_file = open(Utils.user_path("logs", "TBTHClient_stalls.txt"), "a", encoding="utf-8")
+    while not ctx.exit_event.is_set():
+        faulthandler.dump_traceback_later(STACK_DUMP_SECONDS, repeat=False, file=stack_file)
+        started = time.monotonic()
+        await asyncio.sleep(seconds)
+        faulthandler.cancel_dump_traceback_later()
+        late = time.monotonic() - started - seconds
+        if late > LOOP_LAG_WARNING_SECONDS:
+            logger.warning(f"Event loop was blocked for {late:.1f}s")
+            stack_file.write(f"--- stall of {late:.1f}s ended at {time.strftime('%H:%M:%S')} ---\n")
+            stack_file.flush()
+
+
+def launch(*launch_args: str):
+    async def main():
+        parser = get_base_parser(description="Trails Beyond the Horizon Client")
+        parser.add_argument("--name", default=None, help="Slot name to connect as.")
+        parser.add_argument("--save-dir", default=None, help="Save folder to watch (default: Saved Games/FALCOM/Kai)")
+        parser.add_argument("url", nargs="?", help="Archipelago connection url")
+        args = handle_url_arg(parser.parse_args(launch_args), parser=parser)
+        ctx = TBTHContext(args.connect, args.password)
+        ctx.auth = args.name
+        opt_out_of_power_throttling()
+        if args.save_dir:
+            ctx.save_dir = Path(args.save_dir)
+        ctx.server_task = asyncio.create_task(server_loop(ctx), name="TBTHServerLoop")
+        # CommonClient only checks sys.argv for --nogui; this client may be launched with arguments.
+        if gui_enabled and "--nogui" not in launch_args:
+            ctx.run_gui()
+        ctx.run_cli()
+        watcher = asyncio.create_task(game_watcher(ctx), name="TBTHGameWatcher")
+        watchdog = asyncio.create_task(loop_watchdog(ctx), name="TBTHLoopWatchdog")
+        act_menu_button = asyncio.create_task(act_menu_button_watcher(ctx), name="TBTHActMenuButton")
+        await ctx.exit_event.wait()
+        await watcher
+        await watchdog
+        await act_menu_button
+        await ctx.shutdown()
+
+    import Utils
+    Utils.init_logging("TBTHClient", exception_logger="Client")  # logs/TBTHClient_<time>.txt, like the Launcher
+    colorama.just_fix_windows_console()
+    asyncio.run(main())
+    colorama.deinit()
