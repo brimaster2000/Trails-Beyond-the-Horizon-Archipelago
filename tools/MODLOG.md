@@ -737,3 +737,16 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   github.com/brimaster2000/Trails-Beyond-the-Horizon-Archipelago. Announced by the user on the Archipelago After Dark
   Discord server.
 - Next: collect tester feedback -> 0.1.1 fixes; then true Actsanity (Act Menu entries open by act item).
+
+## ROADMAP: Kai no Kiseki, CLE Steam release (first look, 2026-10-16)
+- User's install: E:\SteamLibrary\steamapps\common\The Legend of Heroes Kai no Kiseki -Farewell, O Zemuria-
+- Differences seen (read-only look, nothing changed):
+  - executable ed9.exe (not kai.exe): every memory offset (flags, inventory) must be found again;
+  - LOOSE files, no .p3a archives: script_<lang>/scena/*.dat and table_<lang>/*.tbl, plus a shared script/ and table/.
+    Patching = replacing files (no archive tools, no bsdiff of a 41 MB archive; small per-file patches instead);
+  - languages: kr / sc / tc only (Korean, Simplified and Traditional Chinese); no English or Japanese folder;
+  - files are NOT encrypted: #scp scripts (system.dat and sys_event.dat in each language) and #TBL tables
+    (t_tbox, t_quest present), so Ingert / KuroTools should read them (KuroTools lists CLE Kuro support).
+- Plan sketch: same world logic and AP names (English, from the NISA tables); map CLE data by id after checking
+  t_tbox / t_quest / event ids match; port the script hooks per language; new memory + save research for ed9.exe;
+  client detects which game it is attached to. Its own game patch (per-file deltas).
