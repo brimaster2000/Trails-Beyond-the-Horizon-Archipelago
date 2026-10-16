@@ -654,3 +654,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   Garten event jumps, events 2000+) are untouched.
 - To test: a save with only some routes cleared (e.g. save086: Kevin 1 done) -> jump to Rean 1: no prompts, Kevin 1
   range full, Van 1 empty. A save with domains 4-5 cleared (save091) -> jump to Van 3: domain 4 flags set.
+- VERIFIED in game (2026-10-16, save 86: Kevin 1 cleared): loading the save filled the records at once
+  (chapters 0, 1, 2, 3, 5). Jump to Rean 1 from the Act Menu: no prompts, Rean's cutscene and party; afterwards
+  Kevin 1 16/16 (answered Yes from the record), Van 1 0/14 (No; its just-started flag was reset), Rean 1 started,
+  and the records survived the jump. The Grim Garten domain answers are not tested in game yet.
