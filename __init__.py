@@ -22,4 +22,4 @@ def launch_client(*args: str):
 
 components.append(Component("Trails Beyond the Horizon Client", "TBTHClient", func=launch_client, component_type=Type.CLIENT, icon='van'))
 
-icon_paths['van'] = local_path('data', 'van.png')
+icon_paths['van'] = f"ap:{__name__}/icons/van.png"

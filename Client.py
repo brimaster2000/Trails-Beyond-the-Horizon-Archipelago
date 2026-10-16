@@ -86,6 +86,21 @@ class TBTHCommandProcessor(ClientCommandProcessor):
             logger.info(f"Save folder: {self.ctx.save_dir}")
             logger.info(f"Act Menu: hold R3 (right stick in) or {self.ctx.act_menu_key} while opening the pause menu")
 
+    def _cmd_install_patch(self, folder: str = ""):
+        """Install the game patch (close the game first). Optional: the game folder, if it isn't found"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("install", folder))
+
+    def _cmd_uninstall_patch(self, folder: str = ""):
+        """Remove the game patch and restore the original script_eng.p3a (close the game first)"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("uninstall", folder))
+
+    def _cmd_patch_status(self, folder: str = ""):
+        """Show whether the game patch is installed"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.run_patcher("status", folder))
+
     def _cmd_act_menu_key(self, key: str = ""):
         """Set the keyboard key that opens the Act Menu when held while pausing (e.g. F1, F2, TAB, Q)"""
         if not isinstance(self.ctx, TBTHContext):
@@ -117,6 +132,7 @@ class TBTHContext(CommonContext):
         self.announced_locations: set[int] = set()  # own items already shown when their chest was opened
         self.act_menu_pads = None  # controller.Controllers, created by act_menu_button_watcher
         self.act_menu_key = self.saved_act_menu_key()
+        self.save_reading_unavailable = False
         self.goal = Goal.default
         self.grim_garten_chest_checks = GrimGartenChestChecks.default
         self.grim_garten_seen: dict[int, int] = {}  # domain -> chests counted, to explain chests past the checks
@@ -138,6 +154,31 @@ class TBTHContext(CommonContext):
         Utils.persistent_store("tbth", "act_menu_key", self.act_menu_key)
         if self.act_menu_pads is not None:
             self.act_menu_pads.key = key_code(self.act_menu_key)
+
+    async def run_patcher(self, action: str, folder: str = "") -> None:
+        from . import patcher
+        from .game_memory import find_game_pid
+
+        game_folder = Path(folder.strip('"')) if folder else await asyncio.to_thread(patcher.find_game_folder)
+        if game_folder is None or not (game_folder / "kai.exe").exists():
+            logger.info("Game folder not found. Give it as an argument, e.g. "
+                        f'/{action}_patch "D:\\SteamLibrary\\steamapps\\common\\{patcher.GAME_FOLDER_NAME}"')
+            return
+        delta, info = patcher.patch_data()
+        if action == "status":
+            state = await asyncio.to_thread(patcher.status, game_folder, info)
+            logger.info({"patched": "Game patch: installed.", "vanilla": "Game patch: not installed (/install_patch).",
+                         "missing": f"Game patch: no {patcher.ARCHIVE} in {game_folder}.",
+                         "unknown": f"Game patch: {patcher.ARCHIVE} is an unknown version (game update or other "
+                                    "mods?)."}[state])
+            return
+        if await asyncio.to_thread(find_game_pid) is not None:
+            logger.info("Close the game first, then try again.")
+            return
+        if action == "install":
+            logger.info(await asyncio.to_thread(patcher.install, game_folder, delta, info))
+        else:
+            logger.info(await asyncio.to_thread(patcher.uninstall, game_folder, info))
 
     def run_gui(self):
         """Import kivy UI system and start running it as self.ui_task."""
@@ -243,6 +284,14 @@ class TBTHContext(CommonContext):
 
     async def check_newest_save(self) -> None:
         """Fallback while not attached to the game: it autosaves after every chest."""
+        if self.save_reading_unavailable:
+            return
+        try:
+            import zstandard  # noqa: F401  (not bundled with every Archipelago install)
+        except ImportError:
+            self.save_reading_unavailable = True
+            logger.info("Checks are read from the running game only (reading save files needs the zstandard package)")
+            return
         save = save_reader.newest_save(self.save_dir)
         if save is None:
             return
