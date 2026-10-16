@@ -725,3 +725,9 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   template YAML; the packaged client's /install_patch found the game through Steam and patched it to the tested build
   (md5 2365bc86...), keeping the vanilla original as script_eng.p3a.archipelago_backup; a second install said
   "already installed"; a wrong folder gave the hint. Setup restored afterwards (game file stays patched).
+- GitHub: https://github.com/brimaster2000/Trails-Beyond-the-Horizon-Archipelago is a full Archipelago fork (main =
+  upstream). The world goes on branch `trails-beyond-the-horizon` at worlds/beyondthehorizon, added with
+  `git subtree add --prefix=worlds/beyondthehorizon main` on top of the fork's main (full history kept); tag
+  v0.1.0-alpha. 104 tests also pass on upstream Archipelago 0.6.9. Later updates: in a worktree of that branch,
+  `git subtree merge --prefix=worlds/beyondthehorizon main`. Pushing needs the user's GitHub sign-in (and
+  `-c http.sslBackend=schannel`: Git's own CA bundle fails here).
