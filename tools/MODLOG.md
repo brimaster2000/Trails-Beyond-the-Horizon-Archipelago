@@ -717,3 +717,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Package: `git archive --format=zip --prefix=beyondthehorizon/ -o beyondthehorizon.apworld HEAD` (tracked files only;
   tools/vanilla stays out). um publish check: PASS. No file matches any of the 71,626 game files.
 - README, MIT LICENSE, CHANGELOG. 104 tests pass. Open: tool credits (user to supply), clean-install test.
+- Packaging: use Archipelago's own "Build APWorlds" (Launcher component; reads .apignore). It writes the manifest
+  fields compatible_version/version = 7; a plain `git archive` zip lacks them, and Archipelago logs "Invalid or missing
+  manifest" (the apworld would stop loading in 0.7.0). Output: build/apworlds/beyondthehorizon.apworld (38 files).
+- CLEAN-INSTALL TEST PASSED (2026-10-16): source world moved out, only the built .apworld in custom_worlds, vanilla
+  script_eng.p3a in the game folder. The world loaded from the .apworld with no manifest error; a seed generated from the
+  template YAML; the packaged client's /install_patch found the game through Steam and patched it to the tested build
+  (md5 2365bc86...), keeping the vanilla original as script_eng.p3a.archipelago_backup; a second install said
+  "already installed"; a wrong folder gave the hint. Setup restored afterwards (game file stays patched).
