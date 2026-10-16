@@ -58,8 +58,8 @@ research log.
 - Tools used to build the patch (players don't need them):
   - [Ingert](https://github.com/Aureole-Suite/Ingert) by Aureole Suite: decompiles and recompiles the game's scripts.
   - [KuroTools](https://github.com/nnguyen259/KuroTools) by nnguyen259: reads and writes the game's tables.
-  - `p3a_extract` / `p3a_archive`: community tools for the game's .p3a archives (author unknown; please get in touch
-    if they are yours). The game also ships its own `p3a_tool.exe`.
+  - `p3a_extract` / `p3a_archive` from [kuro_dlc_tool](https://github.com/eArmada8/kuro_dlc_tool) by eArmada8:
+    unpack and repack the game's .p3a archives.
 - Act and area lists, and the 4SPG and Grim Garten logic: the Neoseeker walkthrough for Trails beyond the Horizon,
   plus NoobFeed for the Act I parts.
 - Launcher icon: cropped from official *Trails beyond the Horizon* artwork (Nihon Falcom / NIS America).
