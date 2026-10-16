@@ -33,6 +33,9 @@ RECEIVED_COUNTER_FLAG = 50000
 CHAPTER_FLAG_BASE = 41000
 # Final boss door (d8020 EV_door07) opens only with this flag; the client sets it once the goal needs only the boss.
 GOAL_DOOR_FLAG = 41020
+# While set, opening the pause menu shows the Act Menu (system.APActMenu, which clears it). The client sets it while
+# the Act Menu button is held. Must match ACT_MENU_REQUEST_FLAG in tools/build_game_patch.py.
+ACT_MENU_REQUEST_FLAG = 43700
 # Live inventory (verified 2026-10-08: writing here changes the item menu, and saves keep it):
 # [kai.exe + INVENTORY_POINTER_RVA] + INVENTORY_OFFSET = array indexed by item id, 4 bytes each: u16 count, u16 flags.
 INVENTORY_POINTER_RVA = 0xD60250

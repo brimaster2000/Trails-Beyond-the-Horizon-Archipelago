@@ -13,7 +13,7 @@ from . import save_reader
 from .data import CHESTS, GAME_ITEMS, ITEM_STACK_LIMITS, QUESTS
 from .items import ITEM_NAME_TO_ID
 from .game_memory import (
-    CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_PENDING_FLAG,
+    ACT_MENU_REQUEST_FLAG, CHAPTER_FLAG_BASE, GG_FLAG_BASE, GOAL_DOOR_FLAG, POPUP_FOUND_ACT, POPUP_FOUND_OTHER, POPUP_FOUND_OWN, POPUP_PENDING_FLAG,
     POPUP_RECEIVED,
     read_marker, seed_marker,
 )
@@ -32,6 +32,7 @@ GAME_ITEM_NAMES = {contents[0][0]: name.rsplit(" x", 1)[0] for name, (_, content
 # AP item id of each act item -> the chapter it unlocks.
 STORY_ITEM_CHAPTERS = {ITEM_NAME_TO_ID[name]: chapter for name, chapter in CHAPTER_IDS.items()}
 POLL_SECONDS = 0.25  # a chest waits up to 1 s for its popup
+ACT_MENU_POLL_SECONDS = 0.05  # the Act Menu button is held only briefly while pausing
 # Off for now (playtest 2026-10-13: the chest popup kept showing an older item). Must match ENABLE_POPUPS in
 # tools/build_game_patch.py. Items still go straight into the inventory and the client log lists them.
 IN_GAME_POPUPS = False
@@ -337,6 +338,28 @@ async def game_watcher(ctx: TBTHContext) -> None:
         await asyncio.sleep(POLL_SECONDS)
 
 
+async def act_menu_button_watcher(ctx: TBTHContext, pads=None) -> None:
+    """Holding the right stick in (R3) while opening the pause menu opens the Act Menu: the request flag is set while
+    the button is held and cleared on release (the game also clears it when it opens the menu)."""
+    if pads is None:
+        from .controller import Controllers
+
+        pads = Controllers()
+    if not pads.available:
+        logger.warning("No XInput found: the Act Menu button (hold the right stick in, then pause) won't work")
+        return
+    applied = False  # what the game's flag was last set to
+    while not ctx.exit_event.is_set():
+        held = await asyncio.to_thread(pads.act_menu_held)
+        if held != applied and ctx.game_memory is not None:
+            try:
+                await ctx.game_io(ctx.game_memory.set_flag, ACT_MENU_REQUEST_FLAG, held)
+                applied = held
+            except (OSError, RuntimeError):  # game closing, or no save loaded yet: try again next poll
+                pass
+        await asyncio.sleep(ACT_MENU_POLL_SECONDS)
+
+
 def opt_out_of_power_throttling() -> None:
     """Windows throttles background apps (Efficiency mode / EcoQoS). In the playtest that froze this whole process for
     20-50 s at a time while the game had focus, and the server dropped the client. Ask Windows not to throttle it."""
@@ -399,9 +422,11 @@ def launch(*launch_args: str):
         ctx.run_cli()
         watcher = asyncio.create_task(game_watcher(ctx), name="TBTHGameWatcher")
         watchdog = asyncio.create_task(loop_watchdog(ctx), name="TBTHLoopWatchdog")
+        act_menu_button = asyncio.create_task(act_menu_button_watcher(ctx), name="TBTHActMenuButton")
         await ctx.exit_event.wait()
         await watcher
         await watchdog
+        await act_menu_button
         await ctx.shutdown()
 
     import Utils

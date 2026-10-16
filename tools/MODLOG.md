@@ -678,3 +678,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   - "Return to current act": Van Route 5's opening played. Story flags back to the original count (later ranges 159),
     every route up to Van 4 full again, Grim Garten domains 4-6 restored from the records (so the automatic domain
     answers work too), REPLAYING cleared.
+
+## 2026-10-16: Act Menu step 3, the right-stick button (client)
+- controller.py reads XInput (xinput1_4 / 1_3 / 9_1_0) for all 4 slots. Client.act_menu_button_watcher polls it
+  every 0.05 s and writes ACT_MENU_REQUEST_FLAG 43700 on press (R3, the right stick pressed in) and on release only.
+  The game clears it when it opens the Act Menu. So: hold R3, press pause -> Act Menu.
+- 96 tests pass (test_act_menu: fake controller + fake game).
+- First live probe: XInput loaded but saw no controller connected. To check: controller type / Steam Input (a PS or
+  Switch pad through Steam Input is only visible to the game itself); keyboard fallback if needed.
