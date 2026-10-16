@@ -13,17 +13,20 @@
   Garten goal, can reach every domain).
 
 ## Requirements
-- The Legend of Heroes: Trails beyond the Horizon (Steam, Windows), English script.
-- Archipelago 0.6.7 or newer, with this world installed.
-- The game patch (see below).
+- The Legend of Heroes: Trails beyond the Horizon (Steam, Windows), English script, unmodded.
+- Archipelago 0.6.7 or newer.
 
-## Installing the game patch
-1. Close the game and back up `script_eng.p3a` from the game folder.
-2. Build the patch from your own copy of the game:
-   `tools/build_game_patch.py "<game folder>" "<KuroTools folder>" "<work folder>" ["<unpatched script_eng.p3a>"]`
-   It needs the community tools `ingert.exe`, `p3a_extract.exe` and `p3a_archive.exe` in the game folder, and a
-   KuroTools checkout. Copy the built `script_eng.p3a` into the game folder.
-3. To uninstall, put your backup of `script_eng.p3a` back (or verify the game files in Steam).
+## Installing
+1. Install `beyondthehorizon.apworld`: double-click it, or put it in the `custom_worlds` folder of your Archipelago
+   install. Restart the Archipelago Launcher.
+2. Close the game. Open "Trails Beyond the Horizon Client" from the Launcher and type `/install_patch`.
+   - It finds the game through Steam. If it doesn't, give the folder:
+     `/install_patch "D:\SteamLibrary\steamapps\common\The Legend of Heroes Trails beyond the Horizon"`.
+   - It patches `script_eng.p3a` and keeps your original as `script_eng.p3a.archipelago_backup`.
+   - It only patches the file it was made for. After a game update (or with other mods installed) it refuses: verify
+     the game files in Steam and wait for an updated patch.
+3. `/patch_status` shows whether the patch is installed. `/uninstall_patch` restores the original; verifying the game
+   files in Steam also does.
 
 ## Playing
 1. Start the game and load a save (or start a new game).
