@@ -671,3 +671,10 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   company)" before 301; Intermission has only 600 "Opening narration"; Finale starts at 1000. Act I-B/C start at 232/257
   (mid-chapter). APJump runs FC_Event_FlagSet for the first counted event, clears that event's own flag, then
   EVENT_NEXT(opening). Table: ACT_JUMPS in the builder.
+- VERIFIED in game (save 92, at Van Route 5 with everything before it cleared):
+  - the list showed Prologue..Act III-A open and Act III-B / III-C / Finale "(locked)";
+  - Act II-A -> Kevin Route 1: Kevin's opening played. Rean 1 / Van 1 stayed cleared, later story flags wiped, records
+    intact, frontier = 15 (Van 5), REPLAYING set;
+  - "Return to current act": Van Route 5's opening played. Story flags back to the original count (later ranges 159),
+    every route up to Van 4 full again, Grim Garten domains 4-6 restored from the records (so the automatic domain
+    answers work too), REPLAYING cleared.
