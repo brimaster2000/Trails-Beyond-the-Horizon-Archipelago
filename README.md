@@ -55,7 +55,11 @@ research log.
 - Made by Brimaster2000.
 - Built with [Claude Code](https://claude.com/claude-code) (Anthropic's Claude Opus 5.5), which did most of the
   reverse engineering and code under Brimaster2000's direction and in-game testing.
-- Community tools used to build the patch: TODO (ingert, p3a_extract / p3a_archive, KuroTools: authors and links).
+- Tools used to build the patch (players don't need them):
+  - [Ingert](https://github.com/Aureole-Suite/Ingert) by Aureole Suite: decompiles and recompiles the game's scripts.
+  - [KuroTools](https://github.com/nnguyen259/KuroTools) by nnguyen259: reads and writes the game's tables.
+  - `p3a_extract` / `p3a_archive`: community tools for the game's .p3a archives (author unknown; please get in touch
+    if they are yours). The game also ships its own `p3a_tool.exe`.
 - Act and area lists, and the 4SPG and Grim Garten logic: the Neoseeker walkthrough for Trails beyond the Horizon,
   plus NoobFeed for the Act I parts.
 - Launcher icon: cropped from official *Trails beyond the Horizon* artwork (Nihon Falcom / NIS America).
