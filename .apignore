@@ -1,0 +1,5 @@
+# Left out of the .apworld (Archipelago's "Build APWorlds" reads this).
+# Decoded game tables: game data, regenerated locally
+/tools/vanilla
+# Leftover cache-only folder from an earlier client layout
+/client
