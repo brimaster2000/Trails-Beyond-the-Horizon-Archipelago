@@ -705,3 +705,4 @@ The game has no network or file I/O hooks we can use from scripts. Options:
     never reached.
 - Keyboard: hold a key (default F1, GetAsyncKeyState) while pausing. /act_menu_key <key> changes it and remembers it
   (Utils.persistent_store "tbth"/"act_menu_key"). 99 tests pass.
+- VERIFIED in game: F1 alone does nothing in the game; holding F1 while pausing opens the Act Menu.
