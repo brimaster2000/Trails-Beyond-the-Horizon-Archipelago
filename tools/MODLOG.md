@@ -686,3 +686,6 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - 96 tests pass (test_act_menu: fake controller + fake game).
 - First live probe: XInput loaded but saw no controller connected. To check: controller type / Steam Input (a PS or
   Switch pad through Steam Input is only visible to the game itself); keyboard fallback if needed.
+- The user's controller (Switch 2 Pro, passed through as a PS4 pad) is invisible to XInput. Probe: the winmm joystick
+  API sees it (id 2), R3 = button 12, A = button 2 (DualShock 4 order). controller.py now also polls winmm
+  (joyGetPosEx, 16 ids): held = XInput R3 or winmm button 12. ~5 ms per poll, on a worker thread.
