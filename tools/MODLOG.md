@@ -731,3 +731,9 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   v0.1.0-alpha. 104 tests also pass on upstream Archipelago 0.6.9. Later updates: in a worktree of that branch,
   `git subtree merge --prefix=worlds/beyondthehorizon main`. Pushing needs the user's GitHub sign-in (and
   `-c http.sslBackend=schannel`: Git's own CA bundle fails here).
+
+## 2026-10-16: 0.1.0-alpha RELEASED
+- Pushed: branch trails-beyond-the-horizon (60df8fdb) and tag v0.1.0-alpha to
+  github.com/brimaster2000/Trails-Beyond-the-Horizon-Archipelago. Announced by the user on the Archipelago After Dark
+  Discord server.
+- Next: collect tester feedback -> 0.1.1 fixes; then true Actsanity (Act Menu entries open by act item).
