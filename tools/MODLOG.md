@@ -706,3 +706,14 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Keyboard: hold a key (default F1, GetAsyncKeyState) while pausing. /act_menu_key <key> changes it and remembers it
   (Utils.persistent_store "tbth"/"act_menu_key"). 99 tests pass.
 - VERIFIED in game: F1 alone does nothing in the game; holding F1 while pausing opens the Act Menu.
+
+## 2026-10-16: 0.1.0-alpha release prep
+- Patch delivery: data/script_eng.p3a.bsdiff4 (486,439 bytes) + data/patch.json, made by tools/make_release_patch.py
+  from the vanilla archive (md5 437ed637e2f9e493d788a3412ea4de81) to the release build (md5
+  2365bc86342df9e8d07aa5b403d4c7c7, byte-identical to the tested build23). Client: /install_patch, /uninstall_patch,
+  /patch_status (patcher.py: finds the game through Steam's libraryfolders.vdf, refuses unknown versions, keeps
+  script_eng.p3a.archipelago_backup).
+- Launcher icon now inside the apworld (ap:{__name__}/icons/van.png). zstandard is optional (save-file fallback off).
+- Package: `git archive --format=zip --prefix=beyondthehorizon/ -o beyondthehorizon.apworld HEAD` (tracked files only;
+  tools/vanilla stays out). um publish check: PASS. No file matches any of the 71,626 game files.
+- README, MIT LICENSE, CHANGELOG. 104 tests pass. Open: tool credits (user to supply), clean-install test.
