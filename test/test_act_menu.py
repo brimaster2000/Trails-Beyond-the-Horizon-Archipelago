@@ -69,6 +69,44 @@ class TestActMenuButton(unittest.TestCase):
         asyncio.run(run())  # must not hang or raise
 
 
+class TestActMenuKey(unittest.TestCase):
+    def test_key_names(self) -> None:
+        from ..controller import key_code
+
+        self.assertEqual(key_code("F1"), 0x70)
+        self.assertEqual(key_code(" f12 "), 0x7B)
+        self.assertEqual(key_code("q"), ord("Q"))
+        self.assertIsNone(key_code("SPACEBAR"))
+
+    def test_changing_the_key_updates_the_watcher_and_is_remembered(self) -> None:
+        import Utils
+        from .. import Client
+        from ..controller import Controllers
+
+        async def run() -> tuple:
+            with mock.patch.object(Utils, "persistent_load", return_value={}), \
+                    mock.patch.object(Utils, "persistent_store") as store:
+                ctx = Client.TBTHContext(None, None)
+                self.assertEqual(ctx.act_menu_key, "F1")  # default
+                ctx.act_menu_pads = Controllers(ctx.act_menu_key)
+                ctx.set_act_menu_key("tab")
+                return ctx, store
+
+        ctx, store = asyncio.run(run())
+        self.assertEqual(ctx.act_menu_key, "TAB")
+        self.assertEqual(ctx.act_menu_pads.key, 0x09)
+        store.assert_called_once_with("tbth", "act_menu_key", "TAB")
+
+    def test_saved_key_is_used_and_bad_values_fall_back(self) -> None:
+        import Utils
+        from .. import Client
+
+        with mock.patch.object(Utils, "persistent_load", return_value={"tbth": {"act_menu_key": "f2"}}):
+            self.assertEqual(Client.TBTHContext.saved_act_menu_key(), "F2")
+        with mock.patch.object(Utils, "persistent_load", return_value={"tbth": {"act_menu_key": "nonsense"}}):
+            self.assertEqual(Client.TBTHContext.saved_act_menu_key(), "F1")
+
+
 class TestControllerModule(unittest.TestCase):
     def test_right_stick_bit(self) -> None:
         from ..controller import XINPUT_GAMEPAD_RIGHT_THUMB, XInputGamepad, XInputState

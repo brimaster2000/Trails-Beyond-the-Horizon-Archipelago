@@ -693,3 +693,15 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   Menu; pausing without it opens the normal pause menu. Act Menu steps 1-3 done.
 - Left: step 4 (side effects of the jump's quest_set_state / game_add_free_dungeon_floor_clear when jumping far),
   a keyboard key for keyboard players, the setup-guide entry, and Actsanity (entries open by AP item, not by clear).
+
+## 2026-10-16: Act Menu side effects (step 4, offline) + keyboard key
+- FC_Event_FlagSet's other engine calls on the Act Menu's paths (groups 1-10):
+  - quest_set_state(q, 2/4) for 3 Bathhouse of Ill Repute, 51 Waterworks Bounty, 53 Auge Canyon Bounty,
+    55 Sandsea Bounty, 25 Hotel Reservation Hell, 26 Missing Deliveryman, when it re-applies a route those belong to.
+    This never sends a check (checks come from OnQuestEnd only). A skipped one can still be done by replaying its act
+    (user: finished 4SPGs "are done but can be recompleted"). Alpha testers: confirm for these six.
+  - game_add_free_dungeon_floor_clear(10-22): Grim Garten floor-unlock state only; our checks come from script hooks.
+  - game_free_dungeon_generate / game_set_fdungeon_back_pos: only in group 150 (the developers' Grim Garten jumps),
+    never reached.
+- Keyboard: hold a key (default F1, GetAsyncKeyState) while pausing. /act_menu_key <key> changes it and remembers it
+  (Utils.persistent_store "tbth"/"act_menu_key"). 99 tests pass.

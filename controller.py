@@ -1,5 +1,5 @@
 """
-Reads Xbox-style controllers (XInput) for the Act Menu button.
+Reads controllers (XInput, plus winmm for PlayStation-layout pads) and the keyboard for the Act Menu button.
 
 Game scripts can't read the controller (2026-10-15: no input command in any of the 1311 scripts), so the client
 watches it: while the right stick is pressed in (R3), it sets the game patch's Act Menu request flag, and opening the
@@ -19,6 +19,15 @@ MAX_CONTROLLERS = 4
 WINMM_R3_BUTTON = 12
 MAX_JOYSTICKS = 16
 JOY_RETURNBUTTONS = 0x80
+# Keyboard players hold this key instead (any window may have focus). Windows virtual-key codes.
+DEFAULT_ACT_MENU_KEY = "F1"
+KEY_CODES = {f"F{n}": 0x6F + n for n in range(1, 13)} | {c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"} | {
+    "TAB": 0x09, "BACKSPACE": 0x08, "INSERT": 0x2D, "DELETE": 0x2E, "HOME": 0x24, "END": 0x23, "PAGEUP": 0x21,
+    "PAGEDOWN": 0x22, "BACKQUOTE": 0xC0}
+
+
+def key_code(name: str) -> int | None:
+    return KEY_CODES.get(name.strip().upper())
 
 
 class XInputGamepad(ctypes.Structure):
@@ -63,14 +72,29 @@ def _load_winmm():
     return dll
 
 
+def _load_user32():
+    if sys.platform != "win32":
+        return None
+    dll = ctypes.WinDLL("user32")
+    dll.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    dll.GetAsyncKeyState.restype = ctypes.c_short
+    return dll
+
+
 class Controllers:
-    def __init__(self) -> None:
+    def __init__(self, key: str = DEFAULT_ACT_MENU_KEY) -> None:
         self._xinput = _load_xinput()
         self._winmm = _load_winmm()
+        self._user32 = _load_user32()
+        self.key = key_code(key)
 
     @property
     def available(self) -> bool:
-        return self._xinput is not None or self._winmm is not None
+        return self._xinput is not None or self._winmm is not None or self._user32 is not None
+
+    def key_held(self) -> bool:
+        return bool(self._user32 is not None and self.key is not None
+                    and self._user32.GetAsyncKeyState(self.key) & 0x8000)
 
     def buttons(self) -> int:
         """The XInput buttons held on any connected controller, OR-ed together."""
@@ -96,5 +120,5 @@ class Controllers:
         return held
 
     def act_menu_held(self) -> bool:
-        return bool(self.buttons() & XINPUT_GAMEPAD_RIGHT_THUMB
+        return bool(self.key_held() or self.buttons() & XINPUT_GAMEPAD_RIGHT_THUMB
                     or self.joystick_buttons() >> (WINMM_R3_BUTTON - 1) & 1)

@@ -84,6 +84,19 @@ class TBTHCommandProcessor(ClientCommandProcessor):
         if isinstance(self.ctx, TBTHContext):
             logger.info(f"Game: {'attached' if self.ctx.game_memory else 'not attached (start the game and load a save)'}")
             logger.info(f"Save folder: {self.ctx.save_dir}")
+            logger.info(f"Act Menu: hold R3 (right stick in) or {self.ctx.act_menu_key} while opening the pause menu")
+
+    def _cmd_act_menu_key(self, key: str = ""):
+        """Set the keyboard key that opens the Act Menu when held while pausing (e.g. F1, F2, TAB, Q)"""
+        if not isinstance(self.ctx, TBTHContext):
+            return
+        from .controller import KEY_CODES, key_code
+
+        if key_code(key) is None:
+            logger.info(f"Act Menu key is {self.ctx.act_menu_key}. Choose one of: {', '.join(KEY_CODES)}")
+            return
+        self.ctx.set_act_menu_key(key)
+        logger.info(f"Act Menu key set to {self.ctx.act_menu_key} (remembered for next time)")
 
 
 class TBTHContext(CommonContext):
@@ -102,10 +115,29 @@ class TBTHContext(CommonContext):
         self.found_popups: list[tuple[int, int, int, int]] = []  # (kind, item, qty, more) for checks just found
         self.scouted: dict[int, object] = {}  # location id -> NetworkItem (what each of our locations holds)
         self.announced_locations: set[int] = set()  # own items already shown when their chest was opened
+        self.act_menu_pads = None  # controller.Controllers, created by act_menu_button_watcher
+        self.act_menu_key = self.saved_act_menu_key()
         self.goal = Goal.default
         self.grim_garten_chest_checks = GrimGartenChestChecks.default
         self.grim_garten_seen: dict[int, int] = {}  # domain -> chests counted, to explain chests past the checks
         self.goal_missing: list[str] | None = None  # last reported, to avoid repeating the log line
+
+    @staticmethod
+    def saved_act_menu_key() -> str:
+        import Utils
+        from .controller import DEFAULT_ACT_MENU_KEY, key_code
+
+        key = Utils.persistent_load().get("tbth", {}).get("act_menu_key", DEFAULT_ACT_MENU_KEY)
+        return key.upper() if key_code(key) is not None else DEFAULT_ACT_MENU_KEY
+
+    def set_act_menu_key(self, key: str) -> None:
+        import Utils
+        from .controller import key_code
+
+        self.act_menu_key = key.strip().upper()
+        Utils.persistent_store("tbth", "act_menu_key", self.act_menu_key)
+        if self.act_menu_pads is not None:
+            self.act_menu_pads.key = key_code(self.act_menu_key)
 
     def run_gui(self):
         """Import kivy UI system and start running it as self.ui_task."""
@@ -339,14 +371,15 @@ async def game_watcher(ctx: TBTHContext) -> None:
 
 
 async def act_menu_button_watcher(ctx: TBTHContext, pads=None) -> None:
-    """Holding the right stick in (R3) while opening the pause menu opens the Act Menu: the request flag is set while
-    the button is held and cleared on release (the game also clears it when it opens the menu)."""
+    """Holding the right stick in (R3) or the Act Menu key while opening the pause menu opens the Act Menu: the request
+    flag is set while the button is held and cleared on release (the game also clears it when it opens the menu)."""
     if pads is None:
         from .controller import Controllers
 
-        pads = Controllers()
+        pads = Controllers(ctx.act_menu_key)
+    ctx.act_menu_pads = pads
     if not pads.available:
-        logger.warning("No XInput found: the Act Menu button (hold the right stick in, then pause) won't work")
+        logger.warning("No controller or keyboard access: the Act Menu button won't work")
         return
     applied = False  # what the game's flag was last set to
     while not ctx.exit_event.is_set():
