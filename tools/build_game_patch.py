@@ -39,18 +39,6 @@ ENABLE_POPUPS = False
 # which pause-menu screen has which number. Flags 43600-43663 are unused by the game (old diagnostics used 43400-43599).
 DIAGNOSE_CAMP_MENU = False
 CAMP_MENU_DIAG_FLAG = 43600
-# Act Menu test 1 (2026-10-15): with flag ACT_MENU_TEST_FLAG set, opening the pause menu shows the Act Menu list.
-# Picking an entry only shows a message and sets flag ACT_MENU_TEST_PICK_FLAG + entry; nothing jumps yet.
-ACT_MENU_TEST = True
-ACT_MENU_TEST_FLAG = 43700
-ACT_MENU_TEST_PICK_FLAG = 43710
-ACT_MENU_ENTRIES = ["Prologue", "Act I - A", "Act I - B", "Act I - C", "Act II - A", "Intermission", "Act II - B",
-                    "Act II - C", "Act III - A", "Act III - B", "Act III - C", "Finale"]
-# Act Menu test 2 (2026-10-15): picking one of these runs debug.FC_EventJump(group, route, first event) straight from
-# the pause-menu hook. Story flags are rewritten: throwaway save only.
-ACT_MENU_JUMP_TEST = True
-ACT_MENU_JUMPS = [("Prologue", 1, 0, 101), ("Act I - A", 2, 0, 201), ("Act I - B", 2, 0, 232),
-                  ("Act I - C", 2, 0, 257), ("Act II - Rean Route 1", 3, 18, 301)]
 
 
 # Progress records (Act Menu step 1, 2026-10-15). An act jump wipes the story flags of everything after its target, so
@@ -123,67 +111,199 @@ def patch_debug_ing(source: str) -> str:
     return source
 
 
-def act_menu_test_functions() -> str:
-    if ACT_MENU_JUMP_TEST:
-        return act_menu_jump_test_functions()
-    items = "".join(f'\tmenu_additem(1, "{name}", {i});\n' for i, name in enumerate(ACT_MENU_ENTRIES))
-    names = "".join(f'\tif choice == {i} {{\n\t\tname = "{name}";\n\t}}\n' for i, name in enumerate(ACT_MENU_ENTRIES))
-    return (
-        "// Archipelago: Act Menu test, opened from the pause menu while the test flag is set.\n"
-        "fn APActMenuTest() {\n"
-        f"\treset_flag({ACT_MENU_TEST_FLAG});\n"
-        "\tmes_coordinate(-1, 250, -1, -1);\n"
-        '\tsystem[5,8](65535, "<C1>Act Menu (test)", 10, "<C3>Pick an act. Nothing will happen yet.</C>", 16, 22);\n'
-        "\tmenu_create(1, 0, 0, 28);\n"
-        f"{items}"
-        "\tmenu_open(1, -1, -1);\n"
-        "\tvar choice = menu_wait(1);\n"
-        "\tmenu_close(1);\n"
-        "\tmes_message_close();\n"
-        "\tif menu_is_canceled(1) {\n"
-        "\t\tmes_reset_coordinate();\n"
-        "\t\treturn 0;\n"
-        "\t}\n"
-        f"\tset_flag({ACT_MENU_TEST_PICK_FLAG} + choice);\n"
-        '\tvar name = "";\n'
-        f"{names}"
-        '\tsystem[5,8](65535, "<C1>You picked ", name, ".</C>", 16);\n'
-        "\twait_prompt();\n"
-        "\tmes_message_close();\n"
-        "\tmes_reset_coordinate();\n"
-        "\tmes_close_wait();\n"
-        "\treturn 0;\n"
-        "}\n\n"
-    )
+# Act Menu (missable checks; later the backbone of Actsanity). Opened from the pause menu (OnCampMenuOpen(0)) while
+# flag ACT_MENU_REQUEST_FLAG is set; the client will set it while the right stick is held (step 3). Until then it is
+# set by hand for testing. In wave mode an act can be replayed once it is cleared (progress records above).
+ACT_MENU = True
+ACT_MENU_REQUEST_FLAG = 43700
+ACT_MENU_REPLAYING_FLAG = 41149  # set while replaying an old act; "Return to current act" clears it
+ACT_MENU_FRONTIER_FLAG_BASE = 41150  # + chapter id (41150-41169): the act you left, one flag per chapter
+# Chapter id -> (group, route, first numbered event, opening event, flag of the first numbered event), from
+# debug.FC_Event_FlagSet and t_evtable. Each act opens with an unnumbered "_00" event (e.g. 300 "Movement movie (Rean
+# and company)") one before the first event the flag setter knows (301), except Act I-B/C, which start mid-chapter.
+# The jump sets the flags for the first numbered event, clears that one event's flag, then starts the opening.
+ACT_JUMPS = {
+    0: (1, 0, 101, 100, 32000), 1: (2, 0, 201, 200, 32035), 2: (2, 0, 232, 232, 0), 3: (2, 0, 257, 257, 0),
+    4: (3, 18, 301, 300, 32120), 5: (3, 19, 401, 400, 32165), 6: (3, 20, 501, 500, 32185), 9: (4, 0, 601, 600, 32245),
+    10: (5, 21, 321, 320, 32140), 11: (5, 22, 521, 520, 32200), 12: (6, 23, 541, 540, 32220),
+    13: (7, 24, 801, 800, 32275), 14: (7, 25, 901, 900, 32335), 15: (8, 0, 931, 930, 32360),
+    16: (9, 27, 701, 700, 32250), 17: (9, 28, 841, 840, 32315), 18: (9, 29, 951, 950, 32385),
+    19: (10, 0, 1001, 1000, 32410),
+}
+# The user's Act Menu: one entry per Time Chart step; entries with several routes open a route list.
+ACT_MENU_GROUPS = [
+    ("Prologue", [0]), ("Act I - A", [1]), ("Act I - B", [2]), ("Act I - C", [3]), ("Act II - A", [4, 5, 6]),
+    ("Intermission", [9]), ("Act II - B", [10, 11]), ("Act II - C", [12]), ("Act III - A", [13, 14]),
+    ("Act III - B", [15]), ("Act III - C", [16, 17, 18]), ("Finale", [19]),
+]
+GRIM_GARTEN_HUB_MAPS = ["d5000", "d5010", "d5020", "d5030"]
 
 
-def act_menu_jump_test_functions() -> str:
-    items = "".join(f'\tmenu_additem(1, "{jump[0]}", {i});\n' for i, jump in enumerate(ACT_MENU_JUMPS))
+def act_names() -> dict[int, str]:
+    return {0: "Prologue", 9: "Intermission", **GATED_CHAPTERS}
+
+
+def act_menu_functions() -> str:
+    names = act_names()
     jumps = "".join(
-        f"\tif choice == {i} {{\n\t\ttailcall debug.FC_EventJump({group}, {route}, {event});\n\t}}\n"
-        for i, (_, group, route, event) in enumerate(ACT_MENU_JUMPS))
-    return (
-        "// Archipelago: Act Menu jump test, opened from the pause menu while the test flag is set.\n"
-        "fn APActMenuTest() {\n"
-        f"\treset_flag({ACT_MENU_TEST_FLAG});\n"
-        "\tmes_coordinate(-1, 250, -1, -1);\n"
-        '\tsystem[5,8](65535, "<C1>Act Menu (jump test)", 10, "<C3>Story flags will be rewritten.</C>", 16, 22);\n'
-        "\tmenu_create(1, 0, 0, 28);\n"
-        f"{items}"
-        "\tmenu_open(1, -1, -1);\n"
-        "\tvar choice = menu_wait(1);\n"
-        "\tmenu_close(1);\n"
-        "\tmes_message_close();\n"
-        "\tmes_reset_coordinate();\n"
-        "\tif menu_is_canceled(1) {\n"
-        "\t\treturn 0;\n"
-        "\t}\n"
-        f"\tset_flag({ACT_MENU_TEST_PICK_FLAG} + choice);\n"
-        "\tAPRecordProgress();\n"
-        f"{jumps}"
-        "\treturn 0;\n"
-        "}\n\n"
-    )
+        f"\tif arg0 == {chapter} {{\n\t\tAPJump({group}, {route}, {numbered}, {opening}, {first_flag});\n\t\treturn 0;\n\t}}\n"
+        for chapter, (group, route, numbered, opening, first_flag) in ACT_JUMPS.items())
+    frontier_set = "".join(f"\treset_flag({ACT_MENU_FRONTIER_FLAG_BASE + c});\n" for c in ACT_JUMPS)
+    frontier_get = "".join(f"\tif flag({ACT_MENU_FRONTIER_FLAG_BASE + c}) {{\n\t\treturn {c};\n\t}}\n" for c in ACT_JUMPS)
+    hub = " || ".join(f'map_check_name("{m}")' for m in GRIM_GARTEN_HUB_MAPS)
+
+    def group_open(chapters: list[int]) -> str:
+        return " || ".join(f"APActOpen({c})" for c in chapters)
+
+    top_items = ""
+    for i, (label, chapters) in enumerate(ACT_MENU_GROUPS):
+        top_items += (f"\t\tif {group_open(chapters)} {{\n\t\t\tmenu_additem(1, \"{label}\", {i});\n\t\t}} else {{\n"
+                      f"\t\t\tmenu_additem(1, \"{label} (locked)\", {i});\n\t\t}}\n")
+    picks = ""
+    for i, (label, chapters) in enumerate(ACT_MENU_GROUPS):
+        if len(chapters) == 1:
+            picks += f"\t\tif choice == {i} {{\n\t\t\tchapter = {chapters[0]};\n\t\t}}\n"
+            continue
+        items = "".join(
+            f"\t\t\tif APActOpen({c}) {{\n\t\t\t\tmenu_additem(1, \"{names[c].split(' - ')[-1]}\", {c});\n\t\t\t}} else {{\n"
+            f"\t\t\t\tmenu_additem(1, \"{names[c].split(' - ')[-1]} (locked)\", {c});\n\t\t\t}}\n" for c in chapters)
+        picks += (f"\t\tif choice == {i} {{\n"
+                  "\t\t\tmes_coordinate(-1, 250, -1, -1);\n"
+                  f"\t\t\tsystem[5,8](65535, \"<C1>{label}\", 10, \"<C3>Choose a route.</C>\", 16, 22);\n"
+                  "\t\t\tmenu_create(1, 0, 0, 28);\n"
+                  f"{items}"
+                  "\t\t\tmenu_open(1, -1, -1);\n"
+                  "\t\t\tchapter = menu_wait(1);\n"
+                  "\t\t\tmenu_close(1);\n"
+                  "\t\t\tmes_message_close();\n"
+                  "\t\t\tmes_reset_coordinate();\n"
+                  "\t\t\tif menu_is_canceled(1) {\n\t\t\t\tchapter = -1;\n\t\t\t}\n"
+                  "\t\t}\n")
+    chapter_names = "".join(f"\tif arg0 == {c} {{\n\t\tname = \"{names[c]}\";\n\t}}\n" for c in ACT_JUMPS)
+    return f'''// Archipelago: Act Menu. Replays an act you have cleared (missable checks); "Return to current act" goes back
+// to the start of the act you left. Opened from the pause menu while flag {ACT_MENU_REQUEST_FLAG} is set.
+fn APActOpen(arg0: num) {{
+	if flag({ROUTE_CLEARED_FLAG_BASE} + arg0) {{
+		return 1;
+	}}
+	return 0;
+}}
+
+fn APSetFrontier(arg0: num) {{
+{frontier_set}	set_flag({ACT_MENU_FRONTIER_FLAG_BASE} + arg0);
+	return 0;
+}}
+
+fn APFrontier() {{
+{frontier_get}	return -1;
+}}
+
+// Like debug.FC_EventJump, but starts at the act's opening event (arg3) instead of its first numbered one (arg2).
+fn APJump(arg0: num, arg1: num, arg2: num, arg3: num, arg4: num) {{
+	debug.FC_Reset_ScenarioFlags();
+	debug.FC_Reset_ScenarioFlags2(arg0, arg1, arg2);
+	fade_out(1.0);
+	fade_wait();
+	debug.FC_Event_FlagSet(arg0, arg1, arg2);
+	debug.FC_Event_PartySet(arg0, arg1, arg2);
+	if arg3 < arg2 {{
+		reset_flag(arg4);
+	}}
+	EVENT_NEXT(arg3);
+	return 0;
+}}
+
+fn APJumpToChapter(arg0: num) {{
+{jumps}	return 0;
+}}
+
+// "Replay <act>?" (arg1 = 0) or "Return to <act>?" (arg1 = 1). Yes = 1.
+fn APConfirm(arg0: num, arg1: num) {{
+	var name = "";
+{chapter_names}	mes_coordinate(-1, 250, -1, -1);
+	if arg1 {{
+		system[5,8](65535, "<C1>Return to ", name, "?</C>", 10, "<C3>It restarts from the beginning of the act.</C>", 16, 22);
+	}} else {{
+		system[5,8](65535, "<C1>Replay ", name, "?</C>", 10, "<C3>Return to your current act from this menu later.</C>", 16, 22);
+	}}
+	menu_create(1, 0, 0, 28);
+	menu_additem(1, "Yes", 1);
+	menu_additem(1, "No", 0);
+	menu_open(1, -1, -1);
+	var answer = menu_wait(1);
+	menu_close(1);
+	mes_message_close();
+	mes_reset_coordinate();
+	if menu_is_canceled(1) {{
+		answer = 0;
+	}}
+	return answer;
+}}
+
+fn APActMessage(arg0: str) {{
+	mes_coordinate(-1, 250, -1, -1);
+	system[5,8](65535, "<C1>", arg0, "</C>", 16);
+	wait_prompt();
+	mes_message_close();
+	mes_reset_coordinate();
+	mes_close_wait();
+	return 0;
+}}
+
+fn APActMenu() {{
+	reset_flag({ACT_MENU_REQUEST_FLAG});
+	if APGGDomain() > 0 || {hub} {{
+		APActMessage("The Act Menu is not available in Grim Garten.");
+		return 0;
+	}}
+	APRecordProgress();
+	var choice = 0;
+	var chapter = -1;
+	var frontier = -1;
+	while 1 {{
+		mes_coordinate(-1, 250, -1, -1);
+		system[5,8](65535, "<C1>Act Menu", 10, "<C3>Replay an act you have cleared.</C>", 16, 22);
+		menu_create(1, 0, 0, 28);
+		if flag({ACT_MENU_REPLAYING_FLAG}) && APFrontier() >= 0 {{
+			menu_additem(1, "Return to current act", 99);
+		}}
+{top_items}		menu_open(1, -1, -1);
+		choice = menu_wait(1);
+		menu_close(1);
+		mes_message_close();
+		mes_reset_coordinate();
+		if menu_is_canceled(1) {{
+			return 0;
+		}}
+		chapter = -1;
+		if choice == 99 {{
+			frontier = APFrontier();
+			if APConfirm(frontier, 1) {{
+				reset_flag({ACT_MENU_REPLAYING_FLAG});
+				APJumpToChapter(frontier);
+				return 0;
+			}}
+		}} else {{
+{picks}			if chapter >= 0 {{
+				if !APActOpen(chapter) {{
+					APActMessage("Locked: clear this act first.");
+				}} else if APConfirm(chapter, 0) {{
+					if !flag({ACT_MENU_REPLAYING_FLAG}) {{
+						APSetFrontier(global_work(12));
+						set_flag({ACT_MENU_REPLAYING_FLAG});
+					}}
+					APRecordProgress();
+					APJumpToChapter(chapter);
+					return 0;
+				}}
+			}}
+		}}
+	}}
+	return 0;
+}}
+
+'''
+
 
 # Mailbox flags, shared with game_memory.py. Flags above 37194 are unused by every script and every save.
 HOOK = '''
@@ -442,11 +562,11 @@ def patch_system_ing(source: str) -> str:
         assert source.count(camp) == 1, "OnCampMenuOpen changed"
         source = source.replace(
             camp, camp + f"\tif arg0 >= 0 && arg0 < 64 {{\n\t\tset_flag({CAMP_MENU_DIAG_FLAG} + arg0);\n\t}}\n")
-    if ACT_MENU_TEST:
+    if ACT_MENU:
         camp = "fn OnCampMenuOpen(arg0: num) {\n"
         assert source.count(camp) == 1, "OnCampMenuOpen changed"
-        source = source.replace(camp, act_menu_test_functions() + camp
-                                + f"\tif arg0 == 0 && flag({ACT_MENU_TEST_FLAG}) {{\n\t\tAPActMenuTest();\n\t}}\n")
+        source = source.replace(camp, act_menu_functions() + camp
+                                + f"\tif arg0 == 0 && flag({ACT_MENU_REQUEST_FLAG}) {{\n\t\tAPActMenu();\n\t}}\n")
     anchor = "fn OnMapLoadPre() {"
     assert anchor in source
     return source.replace(anchor, HOOK.lstrip("\n") + record_progress_function() + anchor, 1)

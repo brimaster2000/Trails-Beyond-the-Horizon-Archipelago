@@ -658,3 +658,16 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (chapters 0, 1, 2, 3, 5). Jump to Rean 1 from the Act Menu: no prompts, Rean's cutscene and party; afterwards
   Kevin 1 16/16 (answered Yes from the record), Van 1 0/14 (No; its just-started flag was reset), Rean 1 started,
   and the records survived the jump. The Grim Garten domain answers are not tested in game yet.
+
+## 2026-10-16: Act Menu step 2, the real menu (build23)
+- Entry: OnCampMenuOpen(0) while flag 43700 (ACT_MENU_REQUEST_FLAG) is set; for now set by hand, the client will set
+  it while the right stick is held (step 3). Not available in Grim Garten (domain maps or the d5000-d5030 hub).
+- Menu: the user's 12 entries; "<entry> (locked)" until one of its routes is cleared (ROUTE_CLEARED records,
+  wave mode). Entries with several routes open a route list. Every jump asks "Replay <act>?" first.
+- First replay remembers the act you left: one-hot flags 41150 + chapter (= global_work(12)) and REPLAYING 41149.
+  While replaying, "Return to current act" is listed; it restarts that act from its opening and clears REPLAYING.
+- Act starts, checked in t_evtable (decoded with KuroTools, schema Kai, 1542 events): every act opens with an
+  unnumbered "_00" event one before the first event FC_Event_FlagSet counts, e.g. 300 "Movement movie (Rean and
+  company)" before 301; Intermission has only 600 "Opening narration"; Finale starts at 1000. Act I-B/C start at 232/257
+  (mid-chapter). APJump runs FC_Event_FlagSet for the first counted event, clears that event's own flag, then
+  EVENT_NEXT(opening). Table: ACT_JUMPS in the builder.
