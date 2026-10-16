@@ -689,3 +689,7 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - The user's controller (Switch 2 Pro, passed through as a PS4 pad) is invisible to XInput. Probe: the winmm joystick
   API sees it (id 2), R3 = button 12, A = button 2 (DualShock 4 order). controller.py now also polls winmm
   (joyGetPosEx, 16 ids): held = XInput R3 or winmm button 12. ~5 ms per poll, on a worker thread.
+- VERIFIED in game (2026-10-16, user's Switch 2 Pro pad as PS4 via winmm): holding R3 while pausing opens the Act
+  Menu; pausing without it opens the normal pause menu. Act Menu steps 1-3 done.
+- Left: step 4 (side effects of the jump's quest_set_state / game_add_free_dungeon_floor_clear when jumping far),
+  a keyboard key for keyboard players, the setup-guide entry, and Actsanity (entries open by AP item, not by clear).
