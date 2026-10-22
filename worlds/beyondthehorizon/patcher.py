@@ -12,8 +12,24 @@ import sys
 from pathlib import Path
 
 GAME_FOLDER_NAME = "The Legend of Heroes Trails beyond the Horizon"
+EXE_NAME = "kai.exe"
 ARCHIVE = "script_eng.p3a"
 BACKUP = "script_eng.p3a.archipelago_backup"
+
+
+def folder_from_path(path: str) -> Path:
+    """The game folder, from the path to kai.exe or to the folder itself."""
+    chosen = Path(path.strip().strip('"'))
+    return chosen.parent if chosen.suffix.lower() == ".exe" else chosen
+
+
+def folder_problem(folder: Path) -> str | None:
+    """Why this is not a Trails beyond the Horizon folder, or None if it is."""
+    if not (folder / EXE_NAME).is_file():
+        return f"{folder} has no {EXE_NAME}: choose Trails beyond the Horizon's {EXE_NAME} or its folder."
+    if not (folder / ARCHIVE).is_file():
+        return f"{folder} has no {ARCHIVE}: is this an English copy of the game?"
+    return None
 
 
 def patch_data() -> tuple[bytes, dict]:
@@ -50,10 +66,10 @@ def steam_library_folders() -> list[Path]:
     return folders
 
 
-def find_game_folder() -> Path | None:
+def find_steam_game_folder() -> Path | None:
     for library in steam_library_folders():
         folder = library / "steamapps" / "common" / GAME_FOLDER_NAME
-        if (folder / "kai.exe").exists():
+        if folder_problem(folder) is None:
             return folder
     return None
 
@@ -82,8 +98,9 @@ def install(folder: Path, delta: bytes, info: dict) -> str:
     if state == "missing":
         return f"No {ARCHIVE} in {folder}."
     if state == "unknown":
-        return (f"{ARCHIVE} is not the version this patch was made for (game update or other mods?). "
-                "Verify the game files in Steam, then try again.")
+        return (f"{ARCHIVE} is not the version this patch was made for ({info.get('game_build', 'unknown build')}). "
+                "If the game was updated, or other mods are installed, verify the game files in your store and try "
+                "again. Copies from other stores may need their own patch: please report your store and game version.")
     original = archive.read_bytes()
     patched = bsdiff4.patch(original, delta)
     if hashlib.md5(patched).hexdigest() != info["patched_md5"]:

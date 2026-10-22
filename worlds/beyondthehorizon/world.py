@@ -1,12 +1,33 @@
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
+import settings
 from Options import OptionError
 from worlds.AutoWorld import World
 
 from . import items, locations, regions, rules, web_world
 from . import options as trailsbth_options  # rename due to a name conflict with World.options
 from .scena_regions import PROLOGUE
+
+
+class trailsbthSettings(settings.Group):
+    class GameExe(settings.OptionalUserFilePath):
+        """
+        Trails beyond the Horizon's kai.exe (Steam, GOG or another store). The client installs the game patch next to
+        it. Leave empty to find a Steam install automatically, or to be asked once.
+        """
+        is_exe = True
+        description = "Trails beyond the Horizon (kai.exe)"
+
+        @classmethod
+        def validate(cls, path: str) -> None:
+            from .patcher import folder_from_path, folder_problem
+
+            problem = folder_problem(folder_from_path(path))
+            if problem:
+                raise ValueError(problem)
+
+    game_exe: GameExe = GameExe("")
 
 
 class trailsbthWorld(World):
@@ -17,6 +38,8 @@ class trailsbthWorld(World):
 
     game = "Trails Beyond the Horizon"
     web = web_world.trailsbthWebWorld()
+    settings_key = "trails_beyond_the_horizon_options"
+    settings: ClassVar[trailsbthSettings]
 
     options_dataclass = trailsbth_options.trailsbthOptions
     options: trailsbth_options.trailsbthOptions

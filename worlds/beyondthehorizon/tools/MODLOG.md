@@ -725,3 +725,42 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   template YAML; the packaged client's /install_patch found the game through Steam and patched it to the tested build
   (md5 2365bc86...), keeping the vanilla original as script_eng.p3a.archipelago_backup; a second install said
   "already installed"; a wrong folder gave the hint. Setup restored afterwards (game file stays patched).
+- GitHub: https://github.com/brimaster2000/Trails-Beyond-the-Horizon-Archipelago is a full Archipelago fork (main =
+  upstream). The world goes on branch `trails-beyond-the-horizon` at worlds/beyondthehorizon, added with
+  `git subtree add --prefix=worlds/beyondthehorizon main` on top of the fork's main (full history kept); tag
+  v0.1.0-alpha. 104 tests also pass on upstream Archipelago 0.6.9. Later updates: in a worktree of that branch,
+  `git subtree merge --prefix=worlds/beyondthehorizon main`. Pushing needs the user's GitHub sign-in (and
+  `-c http.sslBackend=schannel`: Git's own CA bundle fails here).
+
+## 2026-10-16: 0.1.0-alpha RELEASED
+- Pushed: branch trails-beyond-the-horizon (60df8fdb) and tag v0.1.0-alpha to
+  github.com/brimaster2000/Trails-Beyond-the-Horizon-Archipelago. Announced by the user on the Archipelago After Dark
+  Discord server.
+- Next: collect tester feedback -> 0.1.1 fixes; then true Actsanity (Act Menu entries open by act item).
+
+## ROADMAP: Kai no Kiseki, CLE Steam release (first look, 2026-10-16)
+- User's install: E:\SteamLibrary\steamapps\common\The Legend of Heroes Kai no Kiseki -Farewell, O Zemuria-
+- Differences seen (read-only look, nothing changed):
+  - executable ed9.exe (not kai.exe): every memory offset (flags, inventory) must be found again;
+  - LOOSE files, no .p3a archives: script_<lang>/scena/*.dat and table_<lang>/*.tbl, plus a shared script/ and table/.
+    Patching = replacing files (no archive tools, no bsdiff of a 41 MB archive; small per-file patches instead);
+  - languages: kr / sc / tc only (Korean, Simplified and Traditional Chinese); no English or Japanese folder;
+  - files are NOT encrypted: #scp scripts (system.dat and sys_event.dat in each language) and #TBL tables
+    (t_tbox, t_quest present), so Ingert / KuroTools should read them (KuroTools lists CLE Kuro support).
+- Plan sketch: same world logic and AP names (English, from the NISA tables); map CLE data by id after checking
+  t_tbox / t_quest / event ids match; port the script hooks per language; new memory + save research for ed9.exe;
+  client detects which game it is attached to. Its own game patch (per-file deltas).
+
+## 2026-10-21: choose the game (any store)
+- host.yaml setting trails_beyond_the_horizon_options > game_exe (world.trailsbthSettings.GameExe, an optional
+  UserFilePath for kai.exe; validate() refuses a folder without kai.exe + script_eng.p3a).
+- Client.find_game: the path given to a command, else host.yaml, else a Steam install, else Archipelago's file
+  browser (pick kai.exe). Whatever is found is saved to host.yaml. New command /game ["<kai.exe or folder>"];
+  /install_patch, /uninstall_patch, /patch_status use it; /tbth shows it.
+- GOTCHA: an empty path setting reads back as "<Archipelago folder>\.exe" (relative path + is_exe); treated as unset.
+- 114 tests pass.
+- OPEN: other stores are untested. Their script_eng.p3a may differ (the patch then refuses, with a message), and a
+  differently built kai.exe would move the memory offsets (STATE_POINTER_RVA / INVENTORY_POINTER_RVA in
+  game_memory.py). A signature scan instead of fixed offsets would cover that; needs a non-Steam exe to verify.
+- VERIFIED (2026-10-21): /game opened the file browser, picking kai.exe saved it to host.yaml, /patch_status found the
+  game through it and reported the patch installed.

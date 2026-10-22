@@ -1,4 +1,4 @@
-# Trails beyond the Horizon for Archipelago (0.1 alpha)
+# Trails beyond the Horizon for Archipelago (0.1.1 alpha)
 
 An [Archipelago](https://archipelago.gg) multiworld randomizer for *The Legend of Heroes: Trails beyond the Horizon*
 (Steam, Windows).
@@ -18,15 +18,20 @@ An [Archipelago](https://archipelago.gg) multiworld randomizer for *The Legend o
 - **Goal:** the final boss, behind a door that stays sealed until your goal requirements are met.
 
 ## Requirements
-- *The Legend of Heroes: Trails beyond the Horizon* on Steam (Windows), English script, unmodded
-  (Steam build 3316940).
+- *The Legend of Heroes: Trails beyond the Horizon* (Windows), English script, unmodded. Tested on Steam
+  (build 3316940).
+  - **GOG and other stores are untested.** The client lets you pick the game from any store, but the game patch and
+    the client were made with the Steam version. If you own another version, please test it and report what happens
+    (the client says so if your copy needs its own patch).
 - Archipelago 0.6.7 or newer.
 
 ## Install
 1. Download `beyondthehorizon.apworld` from the release and double-click it (or put it in Archipelago's
    `custom_worlds` folder). Restart the Archipelago Launcher.
 2. Close the game. Open **Trails Beyond the Horizon Client** from the Launcher and type `/install_patch`.
-   It patches the game's `script_eng.p3a` and keeps the original as `script_eng.p3a.archipelago_backup`.
+   A Steam install is found automatically; otherwise a file browser asks for the game's `kai.exe` (saved for next
+   time; `/game` changes it). It patches the game's `script_eng.p3a` and keeps the original as
+   `script_eng.p3a.archipelago_backup`.
 3. Generate a seed with a Trails beyond the Horizon YAML (Launcher, "Generate Template Options"), host it, and
    connect with the client.
 

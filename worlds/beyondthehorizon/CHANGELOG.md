@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1-alpha (2026-10)
+- Choose the game from any store: a Steam install is still found automatically; otherwise the client asks for the
+  game's `kai.exe` in a file browser and remembers it (`host.yaml`: `trails_beyond_the_horizon_options` >
+  `game_exe`). New client command `/game` to change it.
+- **GOG and other stores are untested and need testers.** The game patch and the client's memory addresses come from
+  the Steam version; a copy whose `script_eng.p3a` differs is refused with a message instead of being patched.
+- The game patch itself is unchanged from 0.1.0.
+
 ## 0.1.0-alpha (2026-10)
 First public test release.
 - Checks: chests and hack boxes, 4SPGs (side quests, bounties, chapter-end main requests), Grim Garten chests and
