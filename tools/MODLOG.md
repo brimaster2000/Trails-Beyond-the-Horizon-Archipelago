@@ -764,3 +764,12 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   game_memory.py). A signature scan instead of fixed offsets would cover that; needs a non-Steam exe to verify.
 - VERIFIED (2026-10-21): /game opened the file browser, picking kai.exe saved it to host.yaml, /patch_status found the
   game through it and reported the patch installed.
+
+## 2026-10-21: 0.1.1-alpha prepared
+- world_version 0.1.1; README / CHANGELOG / setup guide warn that GOG and other stores are untested (testers wanted).
+  Game patch unchanged (no data/ rebuild needed).
+- Built with Build APWorlds (lint PASS) -> Archipelago/release_0.1.1-alpha/ with release notes + Discord draft.
+- Fork branch: `git subtree merge --prefix=worlds/beyondthehorizon main` in a worktree of trails-beyond-the-horizon
+  (e2aff981), tag v0.1.1-alpha; 114 tests pass on upstream Archipelago 0.6.9. Push is the user's (sign-in).
+- GOTCHA: run upstream tests with stdin closed (`< /dev/null`): Archipelago's dependency check otherwise waits for a
+  keypress forever in a background job.
