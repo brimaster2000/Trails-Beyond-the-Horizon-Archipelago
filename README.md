@@ -1,4 +1,4 @@
-# Trails beyond the Horizon for Archipelago (0.1.1 alpha)
+# Trails beyond the Horizon for Archipelago (0.1.2 alpha)
 
 An [Archipelago](https://archipelago.gg) multiworld randomizer for *The Legend of Heroes: Trails beyond the Horizon*
 (Steam, Windows).

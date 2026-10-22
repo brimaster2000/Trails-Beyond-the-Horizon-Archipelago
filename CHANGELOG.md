@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2-alpha (2026-10)
+- **Fix:** the client didn't tell seeds apart when checking whether a save belongs to the current seed, so a save
+  from another seed could be used (and, with the game closed, its opened chests sent as checks). Each seed now links
+  its own saves. Saves linked by 0.1.0 / 0.1.1 are taken over automatically the first time you load them with the
+  game running, without delivering any item twice.
+- No game patch change: just replace the .apworld.
+
 ## 0.1.1-alpha (2026-10)
 - Choose the game from any store: a Steam install is still found automatically; otherwise the client asks for the
   game's `kai.exe` in a file browser and remembers it (`host.yaml`: `trails_beyond_the_horizon_options` >
