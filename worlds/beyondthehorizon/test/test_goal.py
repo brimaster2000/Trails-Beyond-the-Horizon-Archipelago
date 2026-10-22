@@ -46,6 +46,7 @@ class TestGoalDoor(unittest.TestCase):
 
         async def run() -> None:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.game_memory = game
             ctx.goal = goal
             ctx.items_received = []
@@ -76,6 +77,7 @@ class TestGoalSent(unittest.TestCase):
 
         async def run() -> None:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.game_memory = game
             ctx.items_received = []
             ctx.missing_locations = set()
