@@ -73,6 +73,7 @@ class TestLiveDelivery(unittest.TestCase):
 
         async def sync() -> None:
             ctx = TBTHContext(None, None)  # needs a running event loop
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.game_memory = game
             ctx.items_received = [SimpleNamespace(item=i, player=2, location=0) for i in received_ap_ids]
             ctx.missing_locations = set()
@@ -121,6 +122,7 @@ class TestTitleScreen(unittest.TestCase):
 
         async def run() -> None:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.game_memory = game
             ctx.items_received = [SimpleNamespace(item=balm, player=2, location=0)]
             ctx.missing_locations = set()
@@ -143,6 +145,7 @@ class TestEventLoopStaysFree(unittest.TestCase):
 
         async def run() -> None:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.game_memory = game
             ctx.items_received = []
             ctx.missing_locations = set()
@@ -174,6 +177,7 @@ class TestChestPopups(unittest.TestCase):
 
         async def run() -> None:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.slot = slot
             ctx.game_memory = game
             ctx.items_received = []
@@ -227,6 +231,7 @@ class TestChestPopupPreemptsStaleReceived(unittest.TestCase):
 
         async def run() -> TBTHContext:
             ctx = TBTHContext(None, None)
+            ctx.seed_name = "test-seed"  # as told by the server's RoomInfo
             ctx.slot = 1
             ctx.game_memory = game
             ctx.items_received = []

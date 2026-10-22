@@ -773,3 +773,11 @@ The game has no network or file I/O hooks we can use from scripts. Options:
   (e2aff981), tag v0.1.1-alpha; 114 tests pass on upstream Archipelago 0.6.9. Push is the user's (sign-in).
 - GOTCHA: run upstream tests with stdin closed (`< /dev/null`): Archipelago's dependency check otherwise waits for a
   keypress forever in a background job.
+## 2026-10-22: BUG (released in 0.1.0/0.1.1): save markers ignored the seed
+- CommonClient's RoomInfo handler compares seed_name but never stores it, so TBTHContext.marker was always
+  crc32(":<slot>") (0x35aeccbc for slot 1) and saves from ANY seed counted as this seed's. Seen in the scaling test:
+  a new seed's client read playtest autosave 227 with the game closed and sent 275 checks.
+- Fix: on_package("RoomInfo") stores seed_name; no linking before it's known; a save with the old empty-seed marker
+  (legacy_marker) is adopted when loaded in game, keeping its received count; the closed-game save fallback only
+  accepts exact markers. (/link_save, on main only, links a foreign save on purpose.)
+  test_marker.py. Ship as 0.1.2 (client only).

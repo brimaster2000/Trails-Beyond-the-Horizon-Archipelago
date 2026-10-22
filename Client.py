@@ -63,6 +63,11 @@ def missing_for_goal(flags: bytes, offset: int, goal: int) -> list[str] | None:
     return goal_requirements_missing(flags, offset, goal)
 
 
+def legacy_marker(slot: int) -> int:
+    """The marker clients before 0.1.2 wrote: the seed name was always missing (see TBTHContext.on_package)."""
+    return seed_marker("", slot)
+
+
 def grim_garten_checks(flags: bytes, offset: int) -> set[int]:
     """Locations reached by the per-domain chest/clear counters; the server only counts those in the seed."""
     found = set()
@@ -309,6 +314,10 @@ class TBTHContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         super().on_package(cmd, args)
+        if cmd == "RoomInfo":
+            # CommonClient only compares seed_name; without storing it every seed's save marker was the same
+            # (crc32(":<slot>")), so saves from another seed were taken as this seed's (fixed in 0.1.2).
+            self.seed_name = args["seed_name"]
         if cmd == "LocationInfo":
             for item in args["locations"]:
                 self.scouted[item.location] = item
@@ -369,7 +378,7 @@ class TBTHContext(CommonContext):
 
     async def check_newest_save(self) -> None:
         """Fallback while not attached to the game: it autosaves after every chest."""
-        if self.save_reading_unavailable:
+        if self.save_reading_unavailable or self.seed_name is None:
             return
         try:
             import zstandard  # noqa: F401  (not bundled with every Archipelago install)
@@ -424,9 +433,16 @@ class TBTHContext(CommonContext):
         if flags is None or not save_reader.flag_is_set(flags, GAME_STARTED_FLAG, 0):  # title screen, no save loaded
             return
         marker = read_marker(flags)
+        if self.seed_name is None:  # not told the seed yet: never link a save to an unknown seed
+            return
         if marker == 0:  # a save this client hasn't seen: link it to this seed
             await self.game_io(self.game_memory.write_marker, self.marker)
             logger.info("Linked the loaded save to this seed")
+        elif marker == legacy_marker(self.slot):
+            # Linked by 0.1.0/0.1.1, whose marker didn't include the seed: assume it is this seed's save and keep its
+            # received-item count (so nothing is delivered twice).
+            await self.game_io(self.game_memory.write_marker, self.marker)
+            logger.info("Updated the loaded save's link to this seed (it was linked by an older client version)")
         elif not self.save_is_ours(marker, "The loaded save"):
             return
         await self.report_checks(save_reader.checked_locations(flags, CHEST_LOCATION_FLAGS, offset=0)
