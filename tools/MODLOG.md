@@ -750,3 +750,15 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - Plan sketch: same world logic and AP names (English, from the NISA tables); map CLE data by id after checking
   t_tbox / t_quest / event ids match; port the script hooks per language; new memory + save research for ed9.exe;
   client detects which game it is attached to. Its own game patch (per-file deltas).
+
+## 2026-10-21: choose the game (any store)
+- host.yaml setting trails_beyond_the_horizon_options > game_exe (world.trailsbthSettings.GameExe, an optional
+  UserFilePath for kai.exe; validate() refuses a folder without kai.exe + script_eng.p3a).
+- Client.find_game: the path given to a command, else host.yaml, else a Steam install, else Archipelago's file
+  browser (pick kai.exe). Whatever is found is saved to host.yaml. New command /game ["<kai.exe or folder>"];
+  /install_patch, /uninstall_patch, /patch_status use it; /tbth shows it.
+- GOTCHA: an empty path setting reads back as "<Archipelago folder>\.exe" (relative path + is_exe); treated as unset.
+- 114 tests pass.
+- OPEN: other stores are untested. Their script_eng.p3a may differ (the patch then refuses, with a message), and a
+  differently built kai.exe would move the memory offsets (STATE_POINTER_RVA / INVENTORY_POINTER_RVA in
+  game_memory.py). A signature scan instead of fixed offsets would cover that; needs a non-Steam exe to verify.

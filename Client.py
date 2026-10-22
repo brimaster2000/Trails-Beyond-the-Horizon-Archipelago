@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -84,10 +85,16 @@ class TBTHCommandProcessor(ClientCommandProcessor):
         if isinstance(self.ctx, TBTHContext):
             logger.info(f"Game: {'attached' if self.ctx.game_memory else 'not attached (start the game and load a save)'}")
             logger.info(f"Save folder: {self.ctx.save_dir}")
+            logger.info(f"Game (host.yaml): {self.ctx.saved_game_exe() or 'not chosen yet (/game)'}")
             logger.info(f"Act Menu: hold R3 (right stick in) or {self.ctx.act_menu_key} while opening the pause menu")
 
+    def _cmd_game(self, path: str = ""):
+        """Choose the game: the path to kai.exe or its folder (any store), or no path to pick it in a file browser"""
+        if isinstance(self.ctx, TBTHContext):
+            asyncio.create_task(self.ctx.choose_game(path))
+
     def _cmd_install_patch(self, folder: str = ""):
-        """Install the game patch (close the game first). Optional: the game folder, if it isn't found"""
+        """Install the game patch (close the game first). Optional: the path to kai.exe or the game folder"""
         if isinstance(self.ctx, TBTHContext):
             asyncio.create_task(self.ctx.run_patcher("install", folder))
 
@@ -155,15 +162,93 @@ class TBTHContext(CommonContext):
         if self.act_menu_pads is not None:
             self.act_menu_pads.key = key_code(self.act_menu_key)
 
+    @staticmethod
+    def game_setting():
+        from .world import trailsbthWorld
+
+        return trailsbthWorld.settings
+
+    def saved_game_exe(self) -> str:
+        """The kai.exe saved in host.yaml, or "" if none. (An empty setting reads back as "<Archipelago folder>\\.exe":
+        Archipelago resolves paths relative to its own folder and adds .exe for executables.)"""
+        saved = str(self.game_setting().game_exe)
+        return "" if not saved or os.path.basename(saved).lower() == ".exe" else saved
+
+    def remember_game(self, folder: Path) -> None:
+        """Saves the game's kai.exe in host.yaml (trails_beyond_the_horizon_options > game_exe)."""
+        import settings
+        from .patcher import EXE_NAME
+        from .world import trailsbthSettings
+
+        group = self.game_setting()
+        exe = str(folder / EXE_NAME)
+        if self.saved_game_exe() != exe:
+            group.game_exe = trailsbthSettings.GameExe(exe)
+            settings.get_settings().save()
+
+    async def find_game(self, chosen: str = "", ask: bool = True) -> Path | None:
+        """The game folder: the path given (kai.exe or its folder), else host.yaml, else a Steam install, else ask
+        with a file browser (any store). Whatever is found is remembered in host.yaml."""
+        from . import patcher
+
+        if chosen:
+            folder = patcher.folder_from_path(chosen)
+            problem = patcher.folder_problem(folder)
+            if problem:
+                logger.info(problem)
+                return None
+            self.remember_game(folder)
+            return folder
+        saved = self.saved_game_exe()
+        if saved:
+            folder = patcher.folder_from_path(saved)
+            if patcher.folder_problem(folder) is None:
+                return folder
+            logger.info(f"The saved game path no longer works ({saved}).")
+        folder = await asyncio.to_thread(patcher.find_steam_game_folder)
+        if folder is None and ask:
+            logger.info(f"Select Trails beyond the Horizon's {patcher.EXE_NAME} (Steam, GOG or another store)...")
+            try:
+                picked = await asyncio.to_thread(self.game_setting().game_exe.browse)
+            except ValueError as e:  # not a game folder (GameExe.validate)
+                logger.info(str(e))
+                return None
+            if picked is None:
+                logger.info(f"No game selected. Use /game \"<path to {patcher.EXE_NAME}>\" to set it.")
+                return None
+            folder = patcher.folder_from_path(picked.resolve())
+        if folder is not None:
+            self.remember_game(folder)
+        return folder
+
+    async def choose_game(self, path: str = "") -> None:
+        """/game: set the game from a path, or always open the file browser (even if one is saved)."""
+        from . import patcher
+
+        if path:
+            folder = await self.find_game(path)
+        else:
+            try:
+                picked = await asyncio.to_thread(self.game_setting().game_exe.browse)
+            except ValueError as e:
+                logger.info(str(e))
+                return
+            if picked is None:
+                logger.info("No game selected; the current choice is kept.")
+                return
+            folder = patcher.folder_from_path(picked.resolve())
+            self.remember_game(folder)
+        if folder is not None:
+            logger.info(f"Game set to {folder} (saved in host.yaml). Next: /install_patch")
+
     async def run_patcher(self, action: str, folder: str = "") -> None:
         from . import patcher
         from .game_memory import find_game_pid
 
-        game_folder = Path(folder.strip('"')) if folder else await asyncio.to_thread(patcher.find_game_folder)
-        if game_folder is None or not (game_folder / "kai.exe").exists():
-            logger.info("Game folder not found. Give it as an argument, e.g. "
-                        f'/{action}_patch "D:\\SteamLibrary\\steamapps\\common\\{patcher.GAME_FOLDER_NAME}"')
+        game_folder = await self.find_game(folder)
+        if game_folder is None:
             return
+        logger.info(f"Game: {game_folder}")
         delta, info = patcher.patch_data()
         if action == "status":
             state = await asyncio.to_thread(patcher.status, game_folder, info)
