@@ -762,3 +762,5 @@ The game has no network or file I/O hooks we can use from scripts. Options:
 - OPEN: other stores are untested. Their script_eng.p3a may differ (the patch then refuses, with a message), and a
   differently built kai.exe would move the memory offsets (STATE_POINTER_RVA / INVENTORY_POINTER_RVA in
   game_memory.py). A signature scan instead of fixed offsets would cover that; needs a non-Steam exe to verify.
+- VERIFIED (2026-10-21): /game opened the file browser, picking kai.exe saved it to host.yaml, /patch_status found the
+  game through it and reported the patch installed.
